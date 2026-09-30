@@ -1,0 +1,19 @@
+Use case: infographic-diagram / precise-object-edit.
+Edit target: the supplied sober modern DuoBox diagram.
+User-requested changes: make the footer comfortably spaced and easy to read; represent TWO physical computer monitors NEXT TO EACH OTHER in the in-game action visual.
+Keep the same modern off-white, charcoal and restrained indigo visual style, sans-serif typography, DuoBox branding, and the voice -> offline recognition -> F7 -> in-game action meaning. All text in English as specified. No fantasy imagery.
+Recompose into a slightly taller landscape canvas, approximately 2240 x 1280, with generous margins. Keep clear typography legible at 850px displayed width. Do NOT shrink the text to fit. Allow more vertical space instead.
+
+HEADER: DuoBox logo at upper left, "Optional · Offline" pill at upper right. Large but restrained headline "Voice to action" and subtitle "Speak. Trigger a key. Act in WoW Classic."
+
+MAIN FLOW: four aligned thin outlined rounded cards. The last card is appreciably WIDER than the first three to accommodate two side-by-side monitors without cramping. Exactly three thin arrows connecting stages left to right. Keep all content within its own card.
+01 "Your voice": microphone icon and speech bubble '"heal"'.
+02 "VoiceKeys": indigo waveform icon; "Offline recognition"; "Vosk / Windows speech".
+03 "One key": simple flat outlined F7 keycap; "Your configured binding".
+04 "In-game action": TWO simple desktop monitor illustrations next to each other, each with its own stand, the same size, NOT overlapping. Label the LEFT monitor "Hunter" and RIGHT monitor "Priest". The Hunter screen has a minimal gray bow-and-arrow outline icon and a neutral gray frame. The Priest screen has an indigo outline healing plus icon and an indigo frame to indicate focus. Put a small indigo status dot and label "Active client" below the Priest label. This shows a two-screen duo setup, with only the Priest client active. Below the pair, centered within the fourth card, "Heal your partner". No key being sent to the Hunter monitor, no branching arrows or dual input, no illustration of characters, no screenshots.
+
+FOOTER: dedicate a spacious full-width area below a thin divider, divided into TWO clearly separated columns rather than several tightly stacked centered lines.
+LEFT column, wider (roughly 58%): a prominent sentence "1 phrase = 1 key = 1 action" on a single line. Then leave AT LEAST one full text line of EMPTY VERTICAL SPACE before the smaller instruction "Switch to the priest client before speaking." Use ample internal padding and baseline spacing.
+RIGHT column (roughly 42%): a medium-size heading "Command examples". Leave ample vertical space. Under it, three compact neutral outlined pills in a single row, "follow → F1", "shield → F4", "heal → F7". Leave ample vertical space again, then the muted but clearly readable sentence "More commands available".
+The examples are explicitly NON-EXHAUSTIVE. The footer columns should feel like two separate small blocks with much more whitespace, never touching the divider or image edge. Do not overlap, squeeze, or tightly stack any text. Have generous blank padding below both footer blocks.
+Exact text only as specified. Preserve factual semantics: external offline VoiceKeys sends a single key to the current active client, user switches to Priest before speaking. Modern minimal, crisp fine outlines, no shadows, no gradients, no textured backdrop, no decoration, no broadcast claims. Deliver the finished image.
