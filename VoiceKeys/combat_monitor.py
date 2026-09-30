@@ -219,7 +219,7 @@ def terminal_log(message, color="gray"):
 class CombatMonitor:
     def __init__(self, config, log=terminal_log):
         settings = config.get("combatMonitor", {})
-        self.enabled = settings.get("enabled", True)
+        self.enabled = settings.get("enabled", False)
         interval = settings.get("pollIntervalMs", 100)
         if not isinstance(interval, (int, float)) or not 50 <= interval <= 5000:
             raise ValueError("combatMonitor.pollIntervalMs must be between 50 and 5000.")

@@ -212,8 +212,12 @@ Test without microphone or key presses: `Start-VoiceKeys-Vosk.bat --selftest` or
 
 ### Hunter combat-exit notifications in the terminal
 
-Reload the hunter's interface (`/reload`) after installing this change. DuoBox shows nine tiny colored squares
-near the top-left corner of the hunter's game area. `/duo combatlog on` enables this signal (on by default),
+This feature is disabled by default. To opt in, set `FEATURES.combatMonitor = true` in `DuoBox.lua`
+and `combatMonitor.enabled = true` in `VoiceKeys/commands.json`, then reload the hunter's interface
+(`/reload`) and run `/duo combatlog on`. The addon feature flag overrides previously saved settings:
+when false, it hides the signal and stops combat-exit tracking.
+
+Once enabled, DuoBox shows nine tiny colored squares near the top-left corner of the hunter's game area,
 and `/duo combatlog off` hides it. This is DuoBox's screen signal, not WoW's `/combatlog` file logging command.
 
 - **With Vosk**: start `Start-VoiceKeys-Vosk.bat` as usual. Notifications share its terminal with voice commands.

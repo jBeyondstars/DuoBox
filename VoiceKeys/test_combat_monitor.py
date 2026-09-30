@@ -65,7 +65,8 @@ class AddonProtocolTests(unittest.TestCase):
         lua.compile(source)
         signal = "local combatSignal = CreateFrame" + source.split("local combatSignal = CreateFrame", 1)[1].split("-- Small status frame", 1)[0]
         exit_branch = source.split('elseif event == "PLAYER_REGEN_ENABLED" then', 1)[1].split('elseif event == "UI_SCALE_CHANGED"', 1)[0]
-        prelude = '''
+        feature_flags = "local FEATURES =" + source.split("local FEATURES =", 1)[1].split("local defaults =", 1)[0]
+        prelude = feature_flags + '''
 local DB = { combatMonitor = true }
 local class = "HUNTER"
 local modifierUpdates = 0
@@ -92,6 +93,7 @@ end
 '''
         api = lua.execute(prelude + signal + '''
 return {
+ feature = function(enabled) FEATURES.combatMonitor = enabled end,
  set = function(session, count, playerClass, enabled)
    combatSession, combatExits, class, DB.combatMonitor = session, count, playerClass, enabled
    UpdateCombatSignal()
@@ -102,6 +104,12 @@ return {
  modifierUpdates = function() return modifierUpdates end
 }
 ''')
+        api["set"](1957, 4, "HUNTER", True)
+        self.assertFalse(api["frame"]["shown"])
+        api["exit"]()
+        self.assertEqual(api["count"](), 4)
+        self.assertEqual(api["modifierUpdates"](), 1)
+        api["feature"](True)
         for session, count in [(0, 0), (4095, 4095), (1957, 2077), (64, 63)]:
             api["set"](session, count, "HUNTER", True)
             cells = api["frame"]["cells"]
@@ -111,14 +119,16 @@ return {
         api["set"](1957, 4095, "HUNTER", True)
         api["exit"]()
         self.assertEqual(api["count"](), 0)
-        self.assertEqual(api["modifierUpdates"](), 1)
+        self.assertEqual(api["modifierUpdates"](), 2)
         api["set"](1957, 4, "PRIEST", True)
         self.assertFalse(api["frame"]["shown"])
         api["exit"]()
         self.assertEqual(api["count"](), 4)
-        self.assertEqual(api["modifierUpdates"](), 2)
+        self.assertEqual(api["modifierUpdates"](), 3)
         api["set"](1957, 4, "HUNTER", False)
         self.assertFalse(api["frame"]["shown"])
+        api["exit"]()
+        self.assertEqual(api["count"](), 4)
 
 
 class TrackerTests(unittest.TestCase):
@@ -166,7 +176,8 @@ class MonitorTests(unittest.TestCase):
         samples = iter([(10, 0), (10, 0), (10, 1), (10, 1), (10, 1),
                         None, (10, 3), (10, 3), (11, 0), (11, 0)])
         messages = []
-        monitor = CombatMonitor({}, lambda message, color: messages.append(message))
+        monitor = CombatMonitor({"combatMonitor": {"enabled": True}},
+                                lambda message, color: messages.append(message))
 
         class Reader:
             def __init__(self, names):
@@ -191,8 +202,9 @@ class MonitorTests(unittest.TestCase):
         self.assertIsNone(monitor.error)
 
     def test_disabled_monitor_starts_no_thread(self):
-        with CombatMonitor({"combatMonitor": {"enabled": False}}) as monitor:
-            self.assertIsNone(monitor.thread)
+        for config in [{}, {"combatMonitor": {}}, {"combatMonitor": {"enabled": False}}]:
+            with self.subTest(config=config), CombatMonitor(config) as monitor:
+                self.assertIsNone(monitor.thread)
 
 
 @unittest.skipUnless(os.name == "nt", "Windows GDI capture")

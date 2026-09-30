@@ -11,6 +11,10 @@
 local ADDON = ...
 local PREFIX = "DUOBOX"
 
+local FEATURES = {
+	combatMonitor = false, -- opt-in screen signal and combat-exit tracking
+}
+
 local defaults = {
 	partner     = nil,    -- partner character name (without realm)
 	role        = nil,    -- "heal" or "dps" (auto: PRIEST = heal)
@@ -28,7 +32,7 @@ local defaults = {
 	bar         = true,   -- Follow / Target / Trade button bar
 	barScale    = 1,      -- bar scale (/duo scale)
 	castbar     = true,   -- priest cast bar + errors on the hunter's screen
-	combatMonitor = true, -- visible hunter combat-exit counter for the terminal reader
+	combatMonitor = false, -- visible hunter combat-exit counter for the terminal reader
 	facing      = true,   -- priest facing indicator
 	facingInvert = false, -- swap left/right if the direction is wrong
 	facingDist  = 25,     -- estimated hunter -> target distance (yards)
@@ -153,8 +157,9 @@ combatSignal:Hide()
 local combatSession, combatExits = 0, 0
 
 local function UpdateCombatSignal()
+	if not FEATURES.combatMonitor or not DB or not DB.combatMonitor then combatSignal:Hide(); return end
 	local _, class = UnitClass("player")
-	if not DB or not DB.combatMonitor or class ~= "HUNTER" then combatSignal:Hide(); return end
+	if class ~= "HUNTER" then combatSignal:Hide(); return end
 	-- Keep the wire format at physical pixel size, independently of WoW UI scale.
 	combatSignal:SetScale(1 / UIParent:GetEffectiveScale())
 	combatSignal:SetAlpha(1)
@@ -1698,8 +1703,10 @@ f:SetScript("OnEvent", function(self, event, ...)
 
 	elseif event == "PLAYER_LOGIN" then
 		-- Persist the generation so /reload cannot rewind the same session counter.
-		DB.combatSignalSession = ((tonumber(DB.combatSignalSession) or math.random(0, 4095)) + 1) % 4096
-		combatSession = DB.combatSignalSession
+		if FEATURES.combatMonitor and DB.combatMonitor then
+			DB.combatSignalSession = ((tonumber(DB.combatSignalSession) or math.random(0, 4095)) + 1) % 4096
+			combatSession = DB.combatSignalSession
+		end
 		UpdateCombatSignal()
 		if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
 			C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
@@ -1837,10 +1844,12 @@ f:SetScript("OnEvent", function(self, event, ...)
 		if DB then UpdateBar() end
 
 	elseif event == "PLAYER_REGEN_ENABLED" then
-		local _, class = UnitClass("player")
-		if class == "HUNTER" then
-			combatExits = (combatExits + 1) % 4096
-			UpdateCombatSignal()
+		if FEATURES.combatMonitor and DB.combatMonitor then
+			local _, class = UnitClass("player")
+			if class == "HUNTER" then
+				combatExits = (combatExits + 1) % 4096
+				UpdateCombatSignal()
+			end
 		end
 		if barPending then UpdateBar() end
 		ApplyModifierBindings()
@@ -1892,6 +1901,10 @@ SlashCmdList.DUOBOX = function(input)
 		DB.role = arg
 		Print("role = " .. arg)
 	elseif cmd == "combatlog" then
+		if not FEATURES.combatMonitor then
+			Print("suivi du combat desactive par le feature flag combatMonitor.")
+			return
+		end
 		OnOff("combatMonitor", arg:lower())
 		UpdateCombatSignal()
 	elseif (cmd == "hp" or cmd == "pet" or cmd == "mana") and tonumber(arg) then

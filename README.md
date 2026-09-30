@@ -15,7 +15,7 @@ The diagram shows a few examples; see the [VoiceKeys setup and full command list
 - Auto-accept invites, quests and resurrections from the partner; quest sharing and comparison
 - Button bar with key bindings (`/duo keys`) and class macros (`/duo macros`)
 - Optional **VoiceKeys**: offline voice commands (Vosk or Windows speech), one phrase = one key
-- Hunter combat-exit notifications in the Vosk terminal, or with `VoiceKeys\Start-CombatMonitor.bat`
+- Optional hunter combat-exit notifications (feature flag disabled by default)
 
 ## Install
 Copy the `DuoBox` folder into `World of Warcraft\_classic_\Interface\AddOns\` on both clients, then in game:
