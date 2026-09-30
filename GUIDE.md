@@ -59,6 +59,9 @@ The role is automatic (priest = heal, hunter = dps). Thresholds: `/duo hp 50`, `
 - **On the priest client**: hunter below 50% health, pet below 35%, hunter dead, aggro on the priest.
 - **On the hunter client**: priest below 50% health, priest mana below 20%, aggro on the priest, priest dead,
   **the priest stopped following you**.
+- **On both clients: quest not turned in.** When one character turns in a quest that the other still has in its log,
+  the other gets 15 s to turn it in too (D-Talk / "talk"); after that both screens get an alert with the quest name
+  ("(pas terminee)" when it is not complete yet). `/duo turnin off` disables it.
 - A small movable status frame shows the partner's health, mana and follow state.
 - **Aggro on the priest** is detected from threat, from a mob targeting the priest (enemy nameplates must be shown, `V` key)
   or from damage taken, and triggers a sound alert on both screens.
@@ -69,9 +72,9 @@ Always shown, semi-transparent, opaque on mouse-over. Shift+drag to move it, `/d
 
 - **Row 1**: **Follow** · **Target** · **Assist** · **Talk** (same as the D-Talk macro) · **Sit** (`/sit`) · **Trade** · **Invite** · **Compare quests** · **Share last quest** · **Key bindings** (gear).
 - **Row 2 (priest only)**: **Fortitude** · **Shield** · **Renew** · **Heal** (Lesser Heal, then Heal once learned) · **Dispel** ·
-  **Resurrection** · **Smite**, **Shadow Word: Pain** and **Wand** (assist the hunter + spell) · **Wait** (stop following) · **Drink** (best drink in your bags for your level).
+  **Resurrection** · **Smite**, **Smite + Wait**, **Shadow Word: Pain** and **Wand** (assist the hunter + spell) · **Wait** (stop following) · **Drink** (best drink in your bags for your level).
 - Fortitude / Shield / Renew / Heal / Dispel: click = partner, **Shift** = partner's pet, **Ctrl** = yourself.
-- **Heal**, **Resurrection**, **Smite** and **Wand** stop following before casting (moving would interrupt the cast):
+- **Heal**, **Resurrection**, **Smite + Wait** and **Wand** stop following before casting (moving would interrupt the cast):
   follow again afterwards.
   Fortitude gets a golden border when a buff is missing or expires in less than 2 minutes (out of combat only).
 - **Compare quests** shares your quests that the partner is missing and tells you which ones they have in addition
@@ -112,6 +115,7 @@ yourself to another action is left alone.
 | D-Wait | stop following (`/follow player`) | `G` |
 | D-Talk | target the hunter's target (NPC), talk to it, accept / turn in its quests | `T` |
 | D-Smite / D-SWP / D-Wand | assist the hunter then Smite / Shadow Word: Pain / Wand | `4` `5` `6` |
+| D-SmiteW | assist the hunter, stop following, then Smite | |
 | D-LHeal, D-Heal, D-Flash | heals | `1` `2` `3` |
 | D-Renew | Renew | `Q` |
 | D-Shield | Power Word: Shield | `E` |
@@ -121,7 +125,7 @@ yourself to another action is left alone.
 | D-Rez | Resurrection on the hunter | `V` |
 
 Example: `Shift+E` = shield on the pet, `Ctrl+1` = heal yourself.
-Spells with a cast time (D-Smite, D-Wand, D-LHeal, D-Heal, D-Flash, D-Rez) stop following first (`/follow player`),
+Spells with a cast time (D-SmiteW, D-Wand, D-LHeal, D-Heal, D-Flash, D-Rez) stop following first (`/follow player`),
 otherwise the follow moves the priest and interrupts the cast. Follow again afterwards (D-Follow / "follow").
 
 ### Hunter
@@ -191,7 +195,7 @@ and downloads the English model `vosk-model-small-en-us-0.15` (~40 MB) into `Voi
 | renew pet | Shift+F5 | interact | ² |
 | talk | T (D-Talk macro) | dot | Y (Shadow Word: Pain) |
 | buff yourself | Ctrl+F2 | heal yourself | Ctrl+F7 |
-| sit | F6 (Sit button) | | |
+| sit | F6 (Sit button) | smite wait | Shift+F11 (Smite + Wait) |
 
 Settings in `commands.json`:
 - `commands`: key and phrases (several phrases per command are allowed).

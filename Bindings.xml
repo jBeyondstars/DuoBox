@@ -15,6 +15,7 @@
 	<Binding name="CLICK DuoBoxBtnDispel:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnRez:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnSmite:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnSmiteWait:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnSWP:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnWand:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnWait:LeftButton" category="ADDONS"/>

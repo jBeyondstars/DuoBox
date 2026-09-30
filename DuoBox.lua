@@ -28,6 +28,7 @@ local defaults = {
 	autoShare   = true,
 	autoRez     = true,
 	autoNpc     = true,   -- D-Talk macro: accept / turn in the NPC's quests
+	turnin      = true,   -- alert when a quest turned in by the partner is still in your log
 	frame       = true,
 	bar         = true,   -- Follow / Target / Trade button bar
 	barScale    = 1,      -- bar scale (/duo scale)
@@ -879,6 +880,50 @@ local function HandleQuestResult(payload)
 end
 
 --------------------------------------------------------------------------------
+-- Turn-in reminder: when one character turns in a quest that the other still
+-- has, the other one gets TURNIN_DELAY seconds to turn it in too (D-Talk),
+-- then both screens are alerted.
+--------------------------------------------------------------------------------
+
+local TURNIN_DELAY = 15
+local turninPending = {} -- [questID] = true, turned in by the partner
+
+local function QuestReady(questID)
+	if C_QuestLog and C_QuestLog.IsComplete then return C_QuestLog.IsComplete(questID) end
+	local idx = QuestLogIndex(questID)
+	if idx and GetQuestLogTitle then return select(6, GetQuestLogTitle(idx)) == 1 end
+end
+
+local function CheckTurnins()
+	local mine, missed = MyQuests(), {}
+	for id in pairs(turninPending) do
+		local title = mine[id]
+		if title then missed[#missed + 1] = QuestReady(id) and title or (title .. " (pas terminee)") end
+	end
+	wipe(turninPending)
+	if #missed == 0 then return end
+	local list = table.concat(missed, ", ")
+	Alert("turnin", "Quete a rendre : " .. list, SOUND_NOTICE, 3)
+	Print("|cffffd040quete(s) pas rendue(s)|r : " .. list)
+	SendComm("QMIS:" .. list:sub(1, 200))
+end
+
+-- The partner turned in a quest (QTIN)
+local function HandlePartnerTurnin(payload)
+	local id = tonumber(payload)
+	if not (DB.turnin and id and MyQuests()[id]) then return end
+	if next(turninPending) == nil then C_Timer.After(TURNIN_DELAY, CheckTurnins) end
+	turninPending[id] = true
+end
+
+-- The partner forgot to turn in quests that you turned in (QMIS)
+local function HandlePartnerMissed(payload)
+	if not DB.turnin then return end
+	Alert("turnin", (DB.partner or "Partenaire") .. " n'a pas rendu : " .. payload, SOUND_NOTICE, 3)
+	Print(("|cffffd040%s n'a pas rendu|r : %s"):format(DB.partner or "le partenaire", payload))
+end
+
+--------------------------------------------------------------------------------
 -- NPC quests: for a short time after the D-Talk macro (/duo npc), open, accept
 -- and turn in the quests of the NPC you talk to. Talking to an NPC by hand is
 -- never automated. Rewards with a choice are left to the player.
@@ -968,7 +1013,8 @@ local function MacroList()
 			{ "D-Wait",    "/follow player" }, -- following yourself = stop following
 			-- Talk to the partner's target (NPC) and accept / turn in its quests
 			{ "D-Talk",    ("#showtooltip\n/assist %s\n/duo npc\n/interact"):format(T) },
-			{ "D-Smite",   ("#showtooltip Smite\n/assist %s\n%s/cast [harm,nodead] Smite"):format(T, STOP_FOLLOW) },
+			{ "D-Smite",   ("#showtooltip Smite\n/assist %s\n/cast [harm,nodead] Smite"):format(T) },
+			{ "D-SmiteW",  ("#showtooltip Smite\n/assist %s\n%s/cast [harm,nodead] Smite"):format(T, STOP_FOLLOW) },
 			{ "D-SWP",     ("#showtooltip Shadow Word: Pain\n/assist %s\n/cast [harm,nodead] Shadow Word: Pain"):format(T) },
 			{ "D-Wand",    ("#showtooltip Shoot\n/assist %s\n%s/cast [harm,nodead] Shoot"):format(T, STOP_FOLLOW) },
 			{ "D-LHeal",   onTarget("Lesser Heal", true) },
@@ -1212,7 +1258,7 @@ local DRINKS = {
 }
 
 local priestSpellButtons = {} -- "spell on partner" buttons (Shift = pet, Ctrl = self)
-local btnHeal, btnRez, btnSmite, btnSWP, btnWand, btnDrink
+local btnHeal, btnRez, btnSmite, btnSmiteWait, btnSWP, btnWand, btnDrink
 
 local function ItemCount(id)
 	if C_Item and C_Item.GetItemCount then return C_Item.GetItemCount(id) end
@@ -1316,7 +1362,9 @@ BuildPriestSpellButtons = function()
 		b.noDesat = true
 		return b
 	end
-	btnSmite = assistSpell("Smite", SPELL.Smite, true)
+	btnSmite = assistSpell("Smite", SPELL.Smite) -- keeps following
+	btnSmiteWait = assistSpell("SmiteWait", SPELL.Smite, true)
+	btnSmiteWait.label = "Chatiment + Wait"
 	btnSWP = assistSpell("SWP", SPELL.SWP) -- instant: keeps following
 	btnWand = assistSpell("Wand", SPELL.Shoot, true)
 	btnWand.label = "Baguette"
@@ -1356,7 +1404,7 @@ local function UpdatePriestSpells(unit, pet)
 	if btnRez and btnRez.spellName then
 		btnRez:SetAttribute("macrotext", ("%s/cast [@%s] %s"):format(STOP_FOLLOW, unit, btnRez.spellName))
 	end
-	for _, b in ipairs({ btnSmite, btnSWP, btnWand }) do
+	for _, b in ipairs({ btnSmite, btnSmiteWait, btnSWP, btnWand }) do
 		if b and b.spellName then
 			b:SetAttribute("macrotext", ("/assist %s\n%s/cast [harm,nodead] %s"):format(unit, b.stopFollow and STOP_FOLLOW or "", b.spellName))
 		end
@@ -1657,6 +1705,7 @@ for key, label in pairs({
 	LastQuest = "Partager la derniere quete", Fort = "Robustesse (pretre)",
 	Shield = "Bouclier (pretre)", Renew = "Renovation (pretre)", Heal = "Soin (pretre)",
 	Dispel = "Dissipation (pretre)", Rez = "Resurrection (pretre)", Smite = "Chatiment + assist (pretre)",
+	SmiteWait = "Chatiment + assist + stop follow (pretre)",
 	SWP = "Mot de l'ombre : Douleur + assist (pretre)",
 	Wand = "Baguette + assist (pretre)", Wait = "Wait / stop follow (pretre)", Drink = "Boire (pretre)",
 }) do
@@ -1677,6 +1726,7 @@ f:RegisterEvent("QUEST_GREETING")
 f:RegisterEvent("QUEST_PROGRESS")
 f:RegisterEvent("QUEST_COMPLETE")
 f:RegisterEvent("QUEST_ACCEPTED")
+f:RegisterEvent("QUEST_TURNED_IN")
 f:RegisterEvent("RESURRECT_REQUEST")
 f:RegisterEvent("AUTOFOLLOW_BEGIN")
 f:RegisterEvent("AUTOFOLLOW_END")
@@ -1779,6 +1829,11 @@ f:SetScript("OnEvent", function(self, event, ...)
 		end
 		C_Timer.After(0.5, function() ShareQuest(questID) end)
 
+	elseif event == "QUEST_TURNED_IN" then
+		local questID = ...
+		turninPending[questID] = nil
+		if DB.turnin then SendComm("QTIN:" .. questID) end
+
 	elseif event == "RESURRECT_REQUEST" then
 		local who = ...
 		if DB.autoRez and IsPartnerName(who) then
@@ -1802,6 +1857,8 @@ f:SetScript("OnEvent", function(self, event, ...)
 		local qcmd, payload = msg:match("^(Q%u+):(.*)$")
 		if qcmd == "QREQ" then HandleQuestRequest(payload); return end
 		if qcmd == "QRES" then HandleQuestResult(payload); return end
+		if qcmd == "QTIN" then HandlePartnerTurnin(payload); return end
+		if qcmd == "QMIS" then HandlePartnerMissed(payload); return end
 		local fcmd, fval = msg:match("^(%u%u):(.*)$")
 		if fcmd == "HF" then
 			hunterFacing, hunterFacingTime = (tonumber(fval) or 0) / 1000, GetTime()
@@ -1886,7 +1943,7 @@ local function OnOff(key, arg)
 	Print(("%s = %s"):format(key, DB[key] and "|cff40ff40on|r" or "|cffff4040off|r"))
 end
 
-local toggles = { sound = "sound", flash = "flash", invite = "autoInvite", quest = "autoQuest", share = "autoShare", rez = "autoRez", frame = "frame", bar = "bar", castbar = "castbar", autonpc = "autoNpc" }
+local toggles = { sound = "sound", flash = "flash", invite = "autoInvite", quest = "autoQuest", share = "autoShare", rez = "autoRez", frame = "frame", bar = "bar", castbar = "castbar", autonpc = "autoNpc", turnin = "turnin" }
 
 SLASH_DUOBOX1 = "/duo"
 SlashCmdList.DUOBOX = function(input)
@@ -1972,7 +2029,7 @@ SlashCmdList.DUOBOX = function(input)
 		Print("  /duo keys            - raccourcis clavier des boutons de la barre")
 		Print("  /duo move            - deplacer / redimensionner la barre de cast et l'orientation")
 		Print("  /duo facing [on|off|invert|dist <m>] - indicateur d'orientation du pretre")
-		Print("  /duo sound|flash|invite|quest|share|rez|frame|castbar|autonpc [on|off]")
+		Print("  /duo sound|flash|invite|quest|share|rez|frame|castbar|autonpc|turnin [on|off]")
 		Print("  /duo status")
 	end
 end

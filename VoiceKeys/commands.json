@@ -38,6 +38,7 @@
         { "key": "F9",       "label": "Dispel",             "phrases": [ "dispel" ] },
         { "key": "F10",      "label": "Resurrection",       "phrases": [ "resurrect" ] },
         { "key": "F11",      "label": "Smite",              "phrases": [ "smite" ] },
+        { "key": "SHIFT-F11", "label": "Smite + wait",      "phrases": [ "smite wait" ] },
         { "key": "F12",      "label": "Wand",               "phrases": [ "wand" ] },
         { "key": "²",        "label": "Interact",           "phrases": [ "interact" ] },
         { "key": "T",        "label": "Talk (NPC quests)",  "phrases": [ "talk" ] },
