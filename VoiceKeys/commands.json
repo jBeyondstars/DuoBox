@@ -1,8 +1,11 @@
 {
     "language": "en-US",
-    "audioDevice": "G435",
+    "audioDevice": 1,
     "voskModel": "model",
     "voskMinConfidence": 0.6,
+    "noiseGate": "auto",
+    "noiseGateFactor": 3.0,
+    "maxUtteranceSec": 4.0,
     "minConfidence": 0.75,
     "dictationMinConfidence": 0.3,
     "showIgnored": true,
@@ -32,6 +35,7 @@
         { "key": "F10",      "label": "Resurrection",       "phrases": [ "resurrect" ] },
         { "key": "F11",      "label": "Smite",              "phrases": [ "smite" ] },
         { "key": "F12",      "label": "Wand",               "phrases": [ "wand" ] },
-        { "key": "²",        "label": "Interact",           "phrases": [ "interact" ] }
+        { "key": "²",        "label": "Interact",           "phrases": [ "interact" ] },
+        { "key": "T",        "label": "Talk (NPC quests)",  "phrases": [ "talk" ] }
     ]
 }

@@ -23,6 +23,7 @@ local defaults = {
 	autoQuest   = true,
 	autoShare   = true,
 	autoRez     = true,
+	autoNpc     = true,   -- D-Talk macro: accept / turn in the NPC's quests
 	frame       = true,
 	bar         = true,   -- Follow / Target / Trade button bar
 	barScale    = 1,      -- bar scale (/duo scale)
@@ -827,6 +828,47 @@ local function HandleQuestResult(payload)
 end
 
 --------------------------------------------------------------------------------
+-- NPC quests: for a short time after the D-Talk macro (/duo npc), open, accept
+-- and turn in the quests of the NPC you talk to. Talking to an NPC by hand is
+-- never automated. Rewards with a choice are left to the player.
+--------------------------------------------------------------------------------
+
+local NPC_ARM_SECONDS = 20
+local npcArmedUntil = 0
+
+local function NpcArmed()
+	return DB.autoNpc and GetTime() < npcArmedUntil
+end
+
+-- Gossip window: turn in completed quests first, then take available ones
+local function HandleGossip()
+	if not (C_GossipInfo and C_GossipInfo.GetActiveQuests) then return end
+	for _, q in ipairs(C_GossipInfo.GetActiveQuests() or {}) do
+		if q.isComplete then C_GossipInfo.SelectActiveQuest(q.questID); return end
+	end
+	local available = C_GossipInfo.GetAvailableQuests() or {}
+	if available[1] then C_GossipInfo.SelectAvailableQuest(available[1].questID) end
+end
+
+-- Quest greeting window (NPC with several quests and no gossip text)
+local function HandleGreeting()
+	for i = 1, GetNumActiveQuests() do
+		local _, isComplete = GetActiveTitle(i)
+		if isComplete then SelectActiveQuest(i); return end
+	end
+	if GetNumAvailableQuests() > 0 then SelectAvailableQuest(1) end
+end
+
+local function HandleQuestComplete()
+	local choices = GetNumQuestChoices()
+	if choices <= 1 then
+		GetQuestReward(choices)
+	else
+		Alert("reward", "Choisis ta recompense de quete", SOUND_NOTICE, 3)
+	end
+end
+
+--------------------------------------------------------------------------------
 -- Macros
 --------------------------------------------------------------------------------
 
@@ -844,6 +886,8 @@ local function MacroList()
 		return {
 			{ "D-Follow",  ("/follow %s"):format(T) },
 			{ "D-Wait",    "/follow player" }, -- following yourself = stop following
+			-- Talk to the partner's target (NPC) and accept / turn in its quests
+			{ "D-Talk",    ("#showtooltip\n/assist %s\n/duo npc\n/interact"):format(T) },
 			{ "D-Smite",   ("#showtooltip Smite\n/assist %s\n/cast [harm,nodead] Smite"):format(T) },
 			{ "D-SWP",     ("#showtooltip Shadow Word: Pain\n/assist %s\n/cast [harm,nodead] Shadow Word: Pain"):format(T) },
 			{ "D-Wand",    ("#showtooltip Shoot\n/assist %s\n/cast [harm,nodead] Shoot"):format(T) },
@@ -866,6 +910,7 @@ local function MacroList()
 			{ "D-PetPassif","#showtooltip\n/petpassive\n/petfollow" },
 			{ "D-FD",      "#showtooltip Feign Death\n/petfollow\n/cast Feign Death" },
 			{ "D-Assist",  ("#showtooltip\n/assist %s\n/petattack"):format(T) },
+			{ "D-Talk",    ("#showtooltip\n/assist %s\n/duo npc\n/interact"):format(T) },
 		}
 		if DB.partner then
 			table.insert(list, { "D-Invite", ("/invite %s"):format(DB.partner) })
@@ -1488,6 +1533,10 @@ f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("PARTY_INVITE_REQUEST")
 f:RegisterEvent("QUEST_DETAIL")
 f:RegisterEvent("QUEST_ACCEPT_CONFIRM")
+f:RegisterEvent("GOSSIP_SHOW")
+f:RegisterEvent("QUEST_GREETING")
+f:RegisterEvent("QUEST_PROGRESS")
+f:RegisterEvent("QUEST_COMPLETE")
 f:RegisterEvent("QUEST_ACCEPTED")
 f:RegisterEvent("RESURRECT_REQUEST")
 f:RegisterEvent("AUTOFOLLOW_BEGIN")
@@ -1543,7 +1592,21 @@ f:SetScript("OnEvent", function(self, event, ...)
 		if DB.autoQuest and IsPartnerName(UnitName("questnpc")) then
 			justReceivedFromPartner = true
 			AcceptQuest()
+		elseif NpcArmed() then
+			if QuestGetAutoAccept and QuestGetAutoAccept() then CloseQuest() else AcceptQuest() end
 		end
+
+	elseif event == "GOSSIP_SHOW" then
+		if NpcArmed() then HandleGossip() end
+
+	elseif event == "QUEST_GREETING" then
+		if NpcArmed() then HandleGreeting() end
+
+	elseif event == "QUEST_PROGRESS" then
+		if NpcArmed() and IsQuestCompletable() then CompleteQuest() end
+
+	elseif event == "QUEST_COMPLETE" then
+		if NpcArmed() then HandleQuestComplete() end
 
 	elseif event == "QUEST_ACCEPT_CONFIRM" then
 		-- escort quests started by the partner
@@ -1660,7 +1723,7 @@ local function OnOff(key, arg)
 	Print(("%s = %s"):format(key, DB[key] and "|cff40ff40on|r" or "|cffff4040off|r"))
 end
 
-local toggles = { sound = "sound", flash = "flash", invite = "autoInvite", quest = "autoQuest", share = "autoShare", rez = "autoRez", frame = "frame", bar = "bar", castbar = "castbar" }
+local toggles = { sound = "sound", flash = "flash", invite = "autoInvite", quest = "autoQuest", share = "autoShare", rez = "autoRez", frame = "frame", bar = "bar", castbar = "castbar", autonpc = "autoNpc" }
 
 SLASH_DUOBOX1 = "/duo"
 SlashCmdList.DUOBOX = function(input)
@@ -1703,6 +1766,9 @@ SlashCmdList.DUOBOX = function(input)
 			OnOff("facing", sub)
 			if not DB.facing then facingFrame:Hide() end
 		end
+	elseif cmd == "npc" then
+		-- called by the D-Talk macro: arm NPC quest handling for a short time
+		npcArmedUntil = GetTime() + NPC_ARM_SECONDS
 	elseif cmd == "keys" then
 		ToggleKeys()
 	elseif cmd == "move" then
@@ -1735,7 +1801,7 @@ SlashCmdList.DUOBOX = function(input)
 		Print("  /duo keys            - raccourcis clavier des boutons de la barre")
 		Print("  /duo move            - deplacer / redimensionner la barre de cast et l'orientation")
 		Print("  /duo facing [on|off|invert|dist <m>] - indicateur d'orientation du pretre")
-		Print("  /duo sound|flash|invite|quest|share|rez|frame|castbar [on|off]")
+		Print("  /duo sound|flash|invite|quest|share|rez|frame|castbar|autonpc [on|off]")
 		Print("  /duo status")
 	end
 end

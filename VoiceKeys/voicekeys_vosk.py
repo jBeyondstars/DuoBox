@@ -18,7 +18,10 @@ Usage:
 """
 
 import argparse
+import array
+import collections
 import ctypes
+import math
 import json
 import os
 import queue
@@ -213,10 +216,70 @@ def resolve_device(sd, wanted):
     text = first input device whose name contains it (e.g. "G435")."""
     if wanted is None or isinstance(wanted, int):
         return wanted
+    if str(wanted).strip().isdigit():  # "1" written with quotes = index 1
+        return int(str(wanted).strip())
     for i, d in enumerate(sd.query_devices()):
         if d["max_input_channels"] > 0 and str(wanted).lower() in d["name"].lower():
             return i
-    raise ValueError(f"No input device matches '{wanted}' (see --devices)")
+    raise ValueError(f"No input device matches '{wanted}' (see --devices). "
+                     f"Edit \"audioDevice\" in commands.json (saving under Program Files may need admin rights)")
+
+
+BLOCK = 2000  # samples per audio block (125 ms)
+
+
+def rms(data):
+    a = array.array("h", data)
+    return math.sqrt(sum(x * x for x in a) / len(a)) if a else 0.0
+
+
+class NoiseGate:
+    """Replaces audio quieter than the voice with true silence.
+
+    Without it, steady background noise (fan, mic hiss, game sound) never lets Vosk
+    detect the end of a phrase; after ~20-30 s it is forced to conclude and matches
+    that long noise to the closest command: a "ghost" spell with no one speaking.
+    """
+
+    def __init__(self, threshold, hangover_blocks=4, preroll_blocks=2):
+        self.threshold = threshold
+        self.hangover = hangover_blocks            # stays open 0.5 s after the last loud block
+        self.preroll = collections.deque(maxlen=preroll_blocks)  # so word onsets are not cut
+        self.open_left = 0
+        self.voiced_blocks = 0                     # voiced audio in the current phrase
+
+    def process(self, data):
+        """Returns the blocks to feed to the recognizer."""
+        if rms(data) >= self.threshold:
+            out = list(self.preroll) if self.open_left == 0 else []
+            self.preroll.clear()
+            self.open_left = self.hangover
+            self.voiced_blocks += 1
+            return out + [data]
+        if self.open_left > 0:
+            self.open_left -= 1
+            self.voiced_blocks += 1
+            return [data]
+        self.preroll.append(data)
+        return [bytes(len(data))]
+
+    def voiced_seconds(self):
+        return self.voiced_blocks * BLOCK / SAMPLE_RATE
+
+
+def calibrate(audio, cfg):
+    """noiseGate: "auto" = measure the ambient noise, a number = fixed RMS threshold, 0 = off."""
+    setting = cfg.get("noiseGate", "auto")
+    if setting in (0, False, None):
+        return 0
+    if setting != "auto":
+        return float(setting)
+    log("Measuring background noise, stay silent for 1.5 s...", "cyan")
+    levels = sorted(rms(audio.get()) for _ in range(12))
+    ambient = levels[len(levels) // 2]
+    threshold = max(ambient * cfg.get("noiseGateFactor", 3.0), 150.0)
+    log(f"Noise gate: ambient {ambient:.0f}, threshold {threshold:.0f} (see --level to tune)", "cyan")
+    return threshold
 
 
 def result_text_and_conf(result_json):
@@ -234,6 +297,7 @@ def main():
     ap.add_argument("--config", default=os.path.join(HERE, "commands.json"))
     ap.add_argument("--selftest", action="store_true", help="check config, model and keys, no microphone")
     ap.add_argument("--devices", action="store_true", help="list audio input devices")
+    ap.add_argument("--level", action="store_true", help="show the live microphone level (to tune noiseGate)")
     args = ap.parse_args()
 
     import sounddevice as sd
@@ -267,6 +331,7 @@ def main():
     disable_quick_edit()
     log(f"VoiceKeys (Vosk) ready, {len(by_phrase)} phrases. Ctrl+C to quit.", "green")
     log(f"Microphone: {device_name}", "cyan")
+    log(f"Config: {os.path.abspath(args.config)}", "dim")
     if prefix:
         log(f"Start every command with '{prefix}'.", "cyan")
     log(f"Pause: {pause}  -  Resume: {resume}", "cyan")
@@ -275,15 +340,37 @@ def main():
     last_fired = {}
     process_names = cfg.get("processNames", ["WowB", "Wow", "WowClassic"])
     cooldown = cfg.get("cooldownMs", 800) / 1000
+    max_utterance = cfg.get("maxUtteranceSec", 4.0)
 
-    with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=2000, device=device,
+    with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=BLOCK, device=device,
                            dtype="int16", channels=1, callback=on_audio):
+        if args.level:
+            log("Live microphone level (Ctrl+C to stop): speak, then stay silent.", "cyan")
+            while True:
+                level = rms(audio.get())
+                print(f"\r{level:7.0f} {'#' * min(60, int(level / 50)):<60}", end="", flush=True)
+
+        threshold = calibrate(audio, cfg)
+        gate = NoiseGate(threshold) if threshold else None
+
         while True:
             data = audio.get()
-            if not rec.AcceptWaveform(data):
+            results = []
+            for block in (gate.process(data) if gate else [data]):
+                if rec.AcceptWaveform(block):
+                    results.append(result_text_and_conf(rec.Result()))
+            if not results:
                 continue
-            text, conf = result_text_and_conf(rec.Result())
+            voiced = gate.voiced_seconds() if gate else 0.0
+            if gate:
+                gate.voiced_blocks = 0
+            text, conf = results[-1]
             if not text:
+                continue
+            # Commands are short: a long "phrase" is noise or conversation
+            if voiced > max_utterance:
+                if cfg.get("showIgnored"):
+                    log(f"(too long, {voiced:.1f} s) '{text}'", "dim")
                 continue
 
             if prefix:
@@ -330,7 +417,7 @@ def main():
             cmd = by_phrase[text]
             send_chord(cmd["chord"])
             beep(cfg, "success")
-            log(f"{cmd['label']:<16} -> {cmd['key']:<10} ({conf:.2f})", "white")
+            log(f"{cmd['label']:<16} -> {cmd['key']:<10} (conf {conf:.2f}, {voiced:.1f} s)", "white")
 
 
 if __name__ == "__main__":

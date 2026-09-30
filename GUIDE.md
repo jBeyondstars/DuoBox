@@ -105,6 +105,7 @@ The same actions are also in the game menu: Key Bindings → AddOns → DuoBox.
 |---|---|---|
 | D-Follow | `/follow` the hunter | `F` |
 | D-Wait | stop following (`/follow player`) | `G` |
+| D-Talk | target the hunter's target (NPC), talk to it, accept / turn in its quests | `T` |
 | D-Smite / D-SWP / D-Wand | assist the hunter then Smite / Shadow Word: Pain / Wand | `4` `5` `6` |
 | D-LHeal, D-Heal, D-Flash | heals | `1` `2` `3` |
 | D-Renew | Renew | `Q` |
@@ -125,6 +126,13 @@ Example: `Shift+E` = shield on the pet, `Ctrl+1` = heal yourself.
 | D-PetFollow / D-PetPassif | recall the pet / passive + recall |
 | D-FD | recall the pet + Feign Death |
 | D-Invite | invite the priest |
+| D-Talk | target the priest's target (NPC), talk to it, accept / turn in its quests |
+
+**D-Talk**: the macro targets the partner's target, arms DuoBox for 20 s (`/duo npc`) and interacts with the NPC (`/interact`).
+While armed, DuoBox opens the NPC's quests, turns in completed ones first, accepts available ones, and takes the reward
+when there is no choice (with a choice it alerts you and waits). Talking to an NPC by hand is never automated.
+You must be in interaction range (walk closer, or enable "Click-to-Move" so the interaction walks to the NPC).
+`/duo autonpc off` disables it.
 
 Spell names are in English (enUS client). A spell not learned yet shows "?" and does nothing.
 To cast a lower rank (saves mana), add `(Rank 2)` in the macro: `Lesser Heal(Rank 2)`.
@@ -168,12 +176,18 @@ and downloads the English model `vosk-model-small-en-us-0.15` (~40 MB) into `Voi
 | shield | F4 | resurrect | F10 |
 | shield pet | Shift+F4 | smite | F11 |
 | renew | F5 | wand | F12 |
-| renew pet | Shift+F5 | | |
+| renew pet | Shift+F5 | interact | ² |
+| talk | T (D-Talk macro) | | |
 
 Settings in `commands.json`:
 - `commands`: key and phrases (several phrases per command are allowed).
 - Keys: F1-F24, letters, digits, `NUMPAD0-9`, named keys, or any single character of your layout (e.g. `"²"` on AZERTY).
 - `voskMinConfidence` (Vosk) / `minConfidence` (Windows): raise them if you get false triggers.
+- `noiseGate` (Vosk): `"auto"` measures the background noise at startup (stay silent 1.5 s) and turns anything quieter
+  than `noiseGateFactor` × that level into silence; a number sets a fixed level; `0` disables it.
+  Without it, steady noise (fan, mic hiss, game sound) can end up matched to a command after ~30 s.
+  `Start-VoiceKeys-Vosk.bat --level` shows the live microphone level to tune it.
+- `maxUtteranceSec` (Vosk): a "phrase" longer than this is ignored (commands are short).
 - `prefix`: e.g. `"priest"` → you must say "priest shield".
 - `pausePhrases` / `resumePhrases`: "stop listening" / "start listening".
 - Beeps: low = command not understood, double = WoW not in the foreground (`beepOnReject`, `beepOnNotFocused`);
