@@ -69,7 +69,7 @@ Always shown, semi-transparent, opaque on mouse-over. Shift+drag to move it, `/d
 
 - **Row 1**: **Follow** · **Target** · **Assist** · **Trade** · **Invite** · **Compare quests** · **Share last quest** · **Key bindings** (gear).
 - **Row 2 (priest only)**: **Fortitude** · **Shield** · **Renew** · **Heal** (Lesser Heal, then Heal once learned) · **Dispel** ·
-  **Resurrection** · **Smite** and **Wand** (assist the hunter + spell) · **Wait** (stop following) · **Drink** (best drink in your bags for your level).
+  **Resurrection** · **Smite**, **Shadow Word: Pain** and **Wand** (assist the hunter + spell) · **Wait** (stop following) · **Drink** (best drink in your bags for your level).
 - Fortitude / Shield / Renew / Heal / Dispel: click = partner, **Shift** = partner's pet, **Ctrl** = yourself.
   Fortitude gets a golden border when a buff is missing or expires in less than 2 minutes (out of combat only).
 - **Compare quests** shares your quests that the partner is missing and tells you which ones they have in addition
@@ -177,7 +177,7 @@ and downloads the English model `vosk-model-small-en-us-0.15` (~40 MB) into `Voi
 | shield pet | Shift+F4 | smite | F11 |
 | renew | F5 | wand | F12 |
 | renew pet | Shift+F5 | interact | ² |
-| talk | T (D-Talk macro) | | |
+| talk | T (D-Talk macro) | dot | Y (Shadow Word: Pain) |
 
 Settings in `commands.json`:
 - `commands`: key and phrases (several phrases per command are allowed).

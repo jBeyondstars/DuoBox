@@ -1111,7 +1111,7 @@ end)
 
 local SPELL = {
 	Shield = 17, Renew = 139, LesserHeal = 2050, Heal = 2054, Dispel = 527,
-	Rez = 2006, Smite = 585, Shoot = 5019,
+	Rez = 2006, Smite = 585, SWP = 589, Shoot = 5019,
 }
 
 -- Drinks: { itemID, required level }; the best one found in the bags is used
@@ -1121,7 +1121,7 @@ local DRINKS = {
 }
 
 local priestSpellButtons = {} -- "spell on partner" buttons (Shift = pet, Ctrl = self)
-local btnHeal, btnRez, btnSmite, btnWand, btnDrink
+local btnHeal, btnRez, btnSmite, btnSWP, btnWand, btnDrink
 
 local function ItemCount(id)
 	if C_Item and C_Item.GetItemCount then return C_Item.GetItemCount(id) end
@@ -1220,6 +1220,7 @@ BuildPriestSpellButtons = function()
 		return b
 	end
 	btnSmite = assistSpell("Smite", SPELL.Smite)
+	btnSWP = assistSpell("SWP", SPELL.SWP)
 	btnWand = assistSpell("Wand", SPELL.Shoot)
 	btnWand.label = "Baguette"
 
@@ -1256,7 +1257,7 @@ local function UpdatePriestSpells(unit, pet)
 		if icon then btnHeal.icon:SetTexture(icon) end
 	end
 	if btnRez then btnRez:SetAttribute("unit", unit) end
-	for _, b in ipairs({ btnSmite, btnWand }) do
+	for _, b in ipairs({ btnSmite, btnSWP, btnWand }) do
 		if b and b.spellName then
 			b:SetAttribute("macrotext", ("/assist %s\n/cast [harm,nodead] %s"):format(unit, b.spellName))
 		end
@@ -1519,6 +1520,7 @@ for key, label in pairs({
 	LastQuest = "Partager la derniere quete", Fort = "Robustesse (pretre)",
 	Shield = "Bouclier (pretre)", Renew = "Renovation (pretre)", Heal = "Soin (pretre)",
 	Dispel = "Dissipation (pretre)", Rez = "Resurrection (pretre)", Smite = "Chatiment + assist (pretre)",
+	SWP = "Mot de l'ombre : Douleur + assist (pretre)",
 	Wand = "Baguette + assist (pretre)", Wait = "Wait / stop follow (pretre)", Drink = "Boire (pretre)",
 }) do
 	_G["BINDING_NAME_CLICK DuoBoxBtn" .. key .. ":LeftButton"] = label
