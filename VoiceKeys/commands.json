@@ -1,0 +1,33 @@
+{
+    "language": "en-US",
+    "minConfidence": 0.75,
+    "dictationMinConfidence": 0.3,
+    "showIgnored": true,
+    "cooldownMs": 800,
+    "prefix": "",
+    "rejectOtherSpeech": true,
+    "onlyWhenWowFocused": true,
+    "beepOnReject": true,
+    "beepOnNotFocused": true,
+    "beepOnSuccess": false,
+    "processNames": [ "WowB", "Wow", "WowClassic", "WowClassicB" ],
+    "pausePhrases": [ "stop listening" ],
+    "resumePhrases": [ "start listening" ],
+    "commands": [
+        { "key": "F1",       "label": "Follow",             "phrases": [ "follow", "follow me" ] },
+        { "key": "F2",       "label": "Fortitude",          "phrases": [ "buff" ] },
+        { "key": "SHIFT-F2", "label": "Fortitude pet",      "phrases": [ "buff pet" ] },
+        { "key": "F3",       "label": "Assist",             "phrases": [ "assist" ] },
+        { "key": "F4",       "label": "Shield",             "phrases": [ "shield" ] },
+        { "key": "SHIFT-F4", "label": "Shield pet",         "phrases": [ "shield pet" ] },
+        { "key": "F5",       "label": "Renew",              "phrases": [ "renew" ] },
+        { "key": "SHIFT-F5", "label": "Renew pet",          "phrases": [ "renew pet" ] },
+        { "key": "F6",       "label": "Wait (stop follow)", "phrases": [ "wait" ] },
+        { "key": "F7",       "label": "Heal",               "phrases": [ "heal", "heal me" ] },
+        { "key": "F8",       "label": "Drink",              "phrases": [ "drink" ] },
+        { "key": "F9",       "label": "Dispel",             "phrases": [ "dispel" ] },
+        { "key": "F10",      "label": "Resurrection",       "phrases": [ "resurrect" ] },
+        { "key": "F11",      "label": "Smite",              "phrases": [ "smite" ] },
+        { "key": "F12",      "label": "Wand",               "phrases": [ "wand" ] }
+    ]
+}

@@ -1,0 +1,19 @@
+<Bindings>
+	<Binding name="CLICK DuoBoxBtnFollow:LeftButton" header="DUOBOX" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnTarget:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnAssist:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnTrade:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnInvite:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnQuests:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnLastQuest:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnFort:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnShield:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnRenew:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnHeal:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnDispel:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnRez:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnSmite:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnWand:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnWait:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnDrink:LeftButton" category="ADDONS"/>
+</Bindings>

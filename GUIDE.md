@@ -1,0 +1,176 @@
+# DuoBox: duo-boxing a Dwarf Priest + Night Elf Hunter (WoW Classic / WoW Forever)
+
+DuoBox is a World of Warcraft Classic addon (plus an optional voice tool) for playing two characters at once:
+the hunter is played normally, the priest follows and heals.
+Everything is designed around **"one key press = one action in one game client"**.
+
+> In-game text (chat messages, tooltips, panels) is currently in French.
+
+## 0. Blizzard rules in short
+- **Allowed**: two accounts (two licenses), two windows, switching by hand (alt+tab or clicking the other screen),
+  in-game macros (`/follow`, `/assist`, `[@target]`…), addons that only display information, raise alerts or accept invites and quests.
+- **Not allowed**: any software or hardware that sends **one key press to several windows** (ISBoxer broadcasting,
+  "multi-window" AutoHotkey scripts, gaming keyboards targeting several clients…) or that automates actions.
+  Simple rule: **1 key press = 1 action in 1 client**.
+- DuoBox follows this: it only raises alerts, never sends an action to the other client and never restarts follow by itself.
+- Always check the official multiboxing policy of the realm type you play on.
+
+## 1. Windows / screens
+1. Start the first client and log in with account A (hunter). Start a second client (click "Play" again in Battle.net,
+   or run the client executable a second time, e.g. `_classic_beta_\WowB.exe` on the beta) and log in with account B (priest).
+2. Display mode: **Windowed (Fullscreen)** in both clients. Move the second window to the other screen with `Win+Shift+→`.
+   In windowed fullscreen, a single **click** on the other screen switches focus (faster than alt+tab).
+3. Type `/duo cvars` once: enables sound in the background (needed to hear the priest's alerts while playing the hunter)
+   and auto loot.
+4. If the background client drops to very low FPS: disable Windows Game Mode, set `WowB.exe` to "High performance"
+   in Windows graphics settings, and turn off the NVIDIA "Background Application Max Frame Rate".
+
+## 2. Addons
+| Addon | Role in the duo |
+|---|---|
+| **DuoBox** (this repo) | cross-client alerts, partner invites/quests/resurrection, quest sharing, button bar, key bindings, macros |
+| **Leatrix Plus** | see settings below |
+| **Questie** | shows the partner's quest progress in tooltips |
+| **RXPGuides** | leveling guide: enable it on the hunter (the leader) only |
+| ThreatClassic2 (optional) | threat meter: check that the pet keeps aggro |
+| Clique (optional) | click-casting on the priest's party frames if you prefer the mouse |
+
+**Leatrix Plus (on both characters)** → *Automation*:
+- Accept party invites from friends (add the other character as a friend, or rely on DuoBox)
+- Automate quests (accept / turn in)
+- Accept summons and resurrections
+- Auto repair, sell grey items
+- *Interface*: Faster auto loot
+
+Game options → Interface: **"Use Raid-Style Party Frames"** on the priest (large, readable frames).
+
+## 3. DuoBox setup (on each character)
+```
+/duo partner PriestName      (on the hunter)
+/duo partner HunterName      (on the priest)
+/duo macros                  (creates the D-xxx macros in the character tab of /macro)
+/duo test                    (switch to the other window: this one must beep and flash)
+```
+Only the first name matters (`Multi`, `Multi Boxing` and `Multi-Realm` all match).
+The role is automatic (priest = heal, hunter = dps). Thresholds: `/duo hp 50`, `/duo pet 35`, `/duo mana 20`.
+`/duo status` shows the current settings and the detected partner unit (it must be `party1`).
+
+### Alerts
+- **On the priest client**: hunter below 50% health, pet below 35%, hunter dead, aggro on the priest.
+- **On the hunter client**: priest below 50% health, priest mana below 20%, aggro on the priest, priest dead,
+  **the priest stopped following you**.
+- A small movable status frame shows the partner's health, mana and follow state.
+- **Aggro on the priest** is detected from threat, from a mob targeting the priest (enemy nameplates must be shown, `V` key)
+  or from damage taken, and triggers a sound alert on both screens.
+
+### Button bar
+Always shown, semi-transparent, opaque on mouse-over. Shift+drag to move it, `/duo bar off` to hide it,
+`/duo scale 1.3` to resize it. Icons are greyed out when the partner is not in the group.
+
+- **Row 1**: **Follow** · **Target** · **Assist** · **Trade** · **Invite** · **Compare quests** · **Share last quest** · **Key bindings** (gear).
+- **Row 2 (priest only)**: **Fortitude** · **Shield** · **Renew** · **Heal** (Lesser Heal, then Heal once learned) · **Dispel** ·
+  **Resurrection** · **Smite** and **Wand** (assist the hunter + spell) · **Wait** (stop following) · **Drink** (best drink in your bags for your level).
+- Fortitude / Shield / Renew / Heal / Dispel: click = partner, **Shift** = partner's pet, **Ctrl** = yourself.
+  Fortitude gets a golden border when a buff is missing or expires in less than 2 minutes (out of combat only).
+- **Compare quests** shares your quests that the partner is missing and tells you which ones they have in addition
+  (then click "Compare" on their window).
+
+### Priest cast bar (hunter screen)
+Yellow while casting, blue for an instant spell, green on success, red when interrupted / failed.
+It also shows the priest's spell errors (out of range, line of sight, not enough mana, wrong facing…).
+`/duo castbar off` to hide it.
+
+### Priest facing indicator (hunter screen)
+For Smite and the wand the priest must face their target. When the priest has an enemy target, the hunter screen shows
+which way to turn (left / right with the angle) or that the priest is facing correctly.
+- The game does not expose mob positions, so the target position is estimated from the pet (if it attacks the same target)
+  or from a point in front of the hunter. If positions are blocked, it falls back to "face the same direction as the hunter"
+  (shown as *approx.*).
+- Does not work in dungeons (positions are blocked there). The priest's "wrong facing" error still triggers an alert.
+- `/duo facing invert` if left/right are swapped, `/duo facing dist 30` to change the estimated distance,
+  `/duo facing off` to hide it, `/duo facing debug` to see which values the client can read.
+
+### Moving and resizing
+`/duo move` shows the cast bar and the facing text with sample content so you can drag them;
+the bottom-right corner of the cast bar resizes it. Type `/duo move` again to save.
+
+### Key bindings
+Gear button at the end of the bar, or `/duo keys`. Click a row, then press a key
+(Shift/Ctrl/Alt modifiers and mouse buttons 3-5 are accepted); right-click a row to clear it. The key is shown on the button.
+The same actions are also in the game menu: Key Bindings → AddOns → DuoBox.
+
+## 4. Macros created by `/duo macros`
+### Priest (target = hunter; **Shift** = pet, **Ctrl** = yourself)
+| Macro | Effect | Suggested key |
+|---|---|---|
+| D-Follow | `/follow` the hunter | `F` |
+| D-Wait | stop following (`/follow player`) | `G` |
+| D-Smite / D-SWP / D-Wand | assist the hunter then Smite / Shadow Word: Pain / Wand | `4` `5` `6` |
+| D-LHeal, D-Heal, D-Flash | heals | `1` `2` `3` |
+| D-Renew | Renew | `Q` |
+| D-Shield | Power Word: Shield | `E` |
+| D-Fort | Power Word: Fortitude | `R` |
+| D-Dispel / D-CureDis | Dispel Magic / Cure Disease | `Z` `X` |
+| D-FearWard | Fear Ward (Dwarf racial) | `C` |
+| D-Rez | Resurrection on the hunter | `V` |
+
+Example: `Shift+E` = shield on the pet, `Ctrl+1` = heal yourself.
+
+### Hunter
+| Macro | Effect |
+|---|---|
+| D-Attack | pet attacks + Auto Shot (does not toggle it off if already active) |
+| D-Mark | Hunter's Mark + pet attacks |
+| D-Assist | take the priest's target + pet attacks (to peel a mob off the priest) |
+| D-PetFollow / D-PetPassif | recall the pet / passive + recall |
+| D-FD | recall the pet + Feign Death |
+| D-Invite | invite the priest |
+
+Spell names are in English (enUS client). A spell not learned yet shows "?" and does nothing.
+To cast a lower rank (saves mana), add `(Rank 2)` in the macro: `Lesser Heal(Rank 2)`.
+
+## 5. Typical flow
+1. The hunter leads: invites (D-Invite) and picks up quests → they are shared and auto-accepted by the priest.
+2. Switch to the priest: Follow, Fortitude (then Shift for the pet). Switch back to the hunter.
+3. The hunter shoots, the pet tanks. Stay on the hunter **as long as no alert sounds**.
+4. "Low health" or "priest aggro" alert → switch to the priest, heal or shield (1 key = 1 spell), Follow again,
+   switch back to the hunter.
+5. Between fights: switch to the priest to drink, then Follow.
+
+Tip: park the priest slightly behind before pulling (instead of a tight follow) to avoid extra adds.
+
+## 6. VoiceKeys (voice commands, optional)
+Folder `DuoBox\VoiceKeys`. Run it **only on the priest's PC / client**: double-click `Lancer-VoiceKeys.bat`
+(requires Windows PowerShell 5.1, included in Windows).
+
+- 1 phrase = 1 key, sent only when WoW is the foreground window on that PC. No sequences, no loops.
+- Uses the Windows offline speech engine. English commands need the en-US speech recognizer
+  (Settings → Time & language → Language & region → add "English (United States)" with speech recognition);
+  otherwise it falls back to another installed recognizer, with worse accuracy.
+- Keys F1 to F12 (this WoW client does not recognize F13-F24). Reserve them for the priest.
+  To bind: click a row in `/duo keys`, then **say the phrase**: VoiceKeys sends the key and it gets recorded.
+  Same for the D-xxx macros through the game's Key Bindings menu.
+- The "pet" commands send Shift + the same key: Shift = pet on the DuoBox buttons and the D-xxx macros.
+- With a single PC, the key goes to whichever WoW window is active: speak while the priest window is focused.
+
+| Phrase | Key | Phrase | Key |
+|---|---|---|---|
+| follow / follow me | F1 | wait | F6 |
+| buff | F2 | heal / heal me | F7 |
+| buff pet | Shift+F2 | drink | F8 |
+| assist | F3 | dispel | F9 |
+| shield | F4 | resurrect | F10 |
+| shield pet | Shift+F4 | smite | F11 |
+| renew | F5 | wand | F12 |
+| renew pet | Shift+F5 | | |
+
+Settings in `commands.json`:
+- `commands`: key and phrases (several phrases per command are allowed).
+- `minConfidence`: raise to 0.85 if you get false triggers.
+- `prefix`: e.g. `"priest"` → you must say "priest shield".
+- `pausePhrases` / `resumePhrases`: "stop listening" / "start listening".
+- Beeps: low = command not understood, double = WoW not in the foreground (`beepOnReject`, `beepOnNotFocused`);
+  `beepOnSuccess` for a high beep on every command sent.
+- `showIgnored`: shows what was heard but is not a command (useful to tune phrases).
+
+Test without microphone or key presses: `Lancer-VoiceKeys.bat -SelfTest`.
