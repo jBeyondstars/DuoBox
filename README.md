@@ -13,6 +13,7 @@ The diagram shows a few examples; see the [VoiceKeys setup and full command list
 - Cross-client alerts (low health, aggro, OOM, follow lost) with sound and taskbar flash
 - Priest cast bar and facing hints on the hunter's screen
 - Auto-accept invites, quests and resurrections from the partner; quest sharing and comparison
+- RestedXP: each objective also shows the partner's progress, and the guide waits until both are done
 - Button bar with key bindings (`/duo keys`) and class macros (`/duo macros`)
 - Optional **VoiceKeys**: offline voice commands (Vosk or Windows speech), one phrase = one key
 - Optional hunter combat-exit notifications (feature flag disabled by default)

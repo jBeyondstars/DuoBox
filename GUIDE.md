@@ -31,7 +31,7 @@ Everything is designed around **"one key press = one action in one game client"*
 | **DuoBox** (this repo) | cross-client alerts, partner invites/quests/resurrection, quest sharing, button bar, key bindings, macros |
 | **Leatrix Plus** | see settings below |
 | **Questie** | shows the partner's quest progress in tooltips |
-| **RXPGuides** | leveling guide: enable it on the hunter (the leader) only |
+| **RXPGuides** | leveling guide: enable it on the hunter (the leader) only; DuoBox adds the priest's objective progress to it ([details](#restedxp-partner-objectives)) |
 | ThreatClassic2 (optional) | threat meter: check that the pet keeps aggro |
 | Clique (optional) | click-casting on the priest's party frames if you prefer the mouse |
 
@@ -106,6 +106,20 @@ The same actions are also in the game menu: Key Bindings → AddOns → DuoBox.
 For Fortitude / Shield / Renew / Heal / Dispel, DuoBox also routes Shift+key and Ctrl+key to the button
 (WoW binds Ctrl+F1..F10 to the stance bar by default, which would swallow Ctrl+F2). A Shift/Ctrl+key you bound
 yourself to another action is left alone.
+
+### RestedXP: partner objectives
+RestedXP only tracks the quests of the character it runs on. DuoBox sends each character's quest progress to the partner,
+so the guide also counts the partner:
+- Each quest objective of the current step shows the partner's count after yours, for example
+  `Kobold Vermin slain: 10/10 [Multi 6/10]` (yellow: in progress, green: done, orange: the partner does not have the quest).
+- The objective is only checked once **both** characters have finished it, so the guide does not move on
+  while the partner still needs kills or items. Ticking the objective's box by hand still skips it.
+- DuoBox must be up to date on both characters; RestedXP is only needed on the character that shows the guide.
+- If the partner does not have the quest, is offline or not in the group, the guide works as usual (it never blocks).
+- Only quest objectives (`.complete` steps) are shared; item collection outside quests (`.collect`) stays per character.
+
+`/duo rxp` shows the state, `/duo rxp off` / `on` hides or shows the partner's progress,
+`/duo rxp hold` switches "wait for the partner" off or on, `/duo rxp sync` resends both quest logs.
 
 ## 4. Macros created by `/duo macros`
 ### Priest (target = hunter; **Shift** = pet, **Ctrl** = yourself)

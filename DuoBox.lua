@@ -8,7 +8,7 @@
 --   * creates class macros (/duo macros).
 --------------------------------------------------------------------------------
 
-local ADDON = ...
+local ADDON, ns = ...
 local PREFIX = "DUOBOX"
 
 local FEATURES = {
@@ -37,6 +37,8 @@ local defaults = {
 	facing      = true,   -- priest facing indicator
 	facingInvert = false, -- swap left/right if the direction is wrong
 	facingDist  = 25,     -- estimated hunter -> target distance (yards)
+	rxp         = true,   -- RestedXP: show the partner's quest objectives (RestedXP.lua)
+	rxpHold     = true,   -- RestedXP: an objective is done only once the partner has it too
 }
 
 local DB
@@ -130,7 +132,7 @@ local selfFollowing = false
 local function SendComm(msg)
 	if not IsInGroup() then return end
 	local send = (C_ChatInfo and C_ChatInfo.SendAddonMessage) or SendAddonMessage
-	if send then send(PREFIX, msg, "PARTY") end
+	if send then return send(PREFIX, msg, "PARTY") end
 end
 
 --------------------------------------------------------------------------------
@@ -1713,6 +1715,16 @@ for key, label in pairs({
 end
 
 --------------------------------------------------------------------------------
+-- Shared with the other DuoBox files (RestedXP.lua)
+--------------------------------------------------------------------------------
+
+ns.Print = Print
+ns.SendComm = SendComm
+ns.IsPartnerName = IsPartnerName
+ns.PartnerUnit = PartnerUnit
+ns.GetDB = function() return DB end
+
+--------------------------------------------------------------------------------
 -- Events
 --------------------------------------------------------------------------------
 
@@ -1993,6 +2005,8 @@ SlashCmdList.DUOBOX = function(input)
 			OnOff("facing", sub)
 			if not DB.facing then facingFrame:Hide() end
 		end
+	elseif cmd == "rxp" then
+		ns.RXPCommand(arg)
 	elseif cmd == "npc" then
 		-- called by the D-Talk macro / Talk button: arm NPC quest handling for a short time
 		ArmNpc()
@@ -2029,6 +2043,7 @@ SlashCmdList.DUOBOX = function(input)
 		Print("  /duo keys            - raccourcis clavier des boutons de la barre")
 		Print("  /duo move            - deplacer / redimensionner la barre de cast et l'orientation")
 		Print("  /duo facing [on|off|invert|dist <m>] - indicateur d'orientation du pretre")
+		Print("  /duo rxp [on|off|hold [on|off]|sync] - objectifs du partenaire dans RestedXP")
 		Print("  /duo sound|flash|invite|quest|share|rez|frame|castbar|autonpc|turnin [on|off]")
 		Print("  /duo status")
 	end
