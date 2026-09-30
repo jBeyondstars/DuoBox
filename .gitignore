@@ -1,0 +1,5 @@
+# VoiceKeys (Vosk): local Python environment and downloaded model
+VoiceKeys/.venv/
+VoiceKeys/model/
+VoiceKeys/model.zip
+VoiceKeys/__pycache__/

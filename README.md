@@ -7,7 +7,7 @@ without any key broadcasting: **1 key press = 1 action in 1 client**.
 - Priest cast bar and facing hints on the hunter's screen
 - Auto-accept invites, quests and resurrections from the partner; quest sharing and comparison
 - Button bar with key bindings (`/duo keys`) and class macros (`/duo macros`)
-- Optional **VoiceKeys**: offline Windows voice commands, one phrase = one key
+- Optional **VoiceKeys**: offline voice commands (Vosk or Windows speech), one phrase = one key
 
 ## Install
 Copy the `DuoBox` folder into `World of Warcraft\_classic_\Interface\AddOns\` on both clients, then in game:

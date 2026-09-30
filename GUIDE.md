@@ -140,13 +140,19 @@ To cast a lower rank (saves mana), add `(Rank 2)` in the macro: `Lesser Heal(Ran
 Tip: park the priest slightly behind before pulling (instead of a tight follow) to avoid extra adds.
 
 ## 6. VoiceKeys (voice commands, optional)
-Folder `DuoBox\VoiceKeys`. Run it **only on the priest's PC / client**: double-click `Lancer-VoiceKeys.bat`
-(requires Windows PowerShell 5.1, included in Windows).
+Folder `DuoBox\VoiceKeys`. Run it **only on the priest's PC / client**. Two engines share the same `commands.json`:
+
+| Engine | Start | Notes |
+|---|---|---|
+| **Vosk** (recommended) | `Setup-VoiceKeys.bat` once, then `Start-VoiceKeys-Vosk.bat` | Offline, free (Apache 2.0). Restricted to the command list, so single words are recognized reliably. Needs Python 3. |
+| Windows speech | `Lancer-VoiceKeys.bat` | Nothing to install (Windows PowerShell 5.1). Needs the en-US speech recognizer (Settings → Time & language → Language & region → add "English (United States)" with speech recognition). Less accurate. |
+
+`Setup-VoiceKeys.bat` creates a Python virtual environment in `VoiceKeys\.venv`, installs `vosk` and `sounddevice`
+and downloads the English model `vosk-model-small-en-us-0.15` (~40 MB) into `VoiceKeys\model`.
 
 - 1 phrase = 1 key, sent only when WoW is the foreground window on that PC. No sequences, no loops.
-- Uses the Windows offline speech engine. English commands need the en-US speech recognizer
-  (Settings → Time & language → Language & region → add "English (United States)" with speech recognition);
-  otherwise it falls back to another installed recognizer, with worse accuracy.
+- **Microphone**: `audioDevice` in `commands.json` selects it by name (e.g. `"G435"`), by index, or `null` for the
+  Windows default. List devices with `Start-VoiceKeys-Vosk.bat --devices`. Check it: the Windows default is often a webcam.
 - Keys F1 to F12 (this WoW client does not recognize F13-F24). Reserve them for the priest.
   To bind: click a row in `/duo keys`, then **say the phrase**: VoiceKeys sends the key and it gets recorded.
   Same for the D-xxx macros through the game's Key Bindings menu.
@@ -166,11 +172,12 @@ Folder `DuoBox\VoiceKeys`. Run it **only on the priest's PC / client**: double-c
 
 Settings in `commands.json`:
 - `commands`: key and phrases (several phrases per command are allowed).
-- `minConfidence`: raise to 0.85 if you get false triggers.
+- Keys: F1-F24, letters, digits, `NUMPAD0-9`, named keys, or any single character of your layout (e.g. `"²"` on AZERTY).
+- `voskMinConfidence` (Vosk) / `minConfidence` (Windows): raise them if you get false triggers.
 - `prefix`: e.g. `"priest"` → you must say "priest shield".
 - `pausePhrases` / `resumePhrases`: "stop listening" / "start listening".
 - Beeps: low = command not understood, double = WoW not in the foreground (`beepOnReject`, `beepOnNotFocused`);
   `beepOnSuccess` for a high beep on every command sent.
 - `showIgnored`: shows what was heard but is not a command (useful to tune phrases).
 
-Test without microphone or key presses: `Lancer-VoiceKeys.bat -SelfTest`.
+Test without microphone or key presses: `Start-VoiceKeys-Vosk.bat --selftest` or `Lancer-VoiceKeys.bat -SelfTest`.

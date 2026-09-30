@@ -1,5 +1,8 @@
 {
     "language": "en-US",
+    "audioDevice": "G435",
+    "voskModel": "model",
+    "voskMinConfidence": 0.6,
     "minConfidence": 0.75,
     "dictationMinConfidence": 0.3,
     "showIgnored": true,
@@ -28,6 +31,7 @@
         { "key": "F9",       "label": "Dispel",             "phrases": [ "dispel" ] },
         { "key": "F10",      "label": "Resurrection",       "phrases": [ "resurrect" ] },
         { "key": "F11",      "label": "Smite",              "phrases": [ "smite" ] },
-        { "key": "F12",      "label": "Wand",               "phrases": [ "wand" ] }
+        { "key": "F12",      "label": "Wand",               "phrases": [ "wand" ] },
+        { "key": "²",        "label": "Interact",           "phrases": [ "interact" ] }
     ]
 }

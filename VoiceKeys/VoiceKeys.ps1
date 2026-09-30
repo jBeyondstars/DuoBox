@@ -36,6 +36,7 @@ public static class VKInput {
 
     [DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint n, INPUT[] inputs, int size);
     [DllImport("user32.dll")] static extern uint MapVirtualKey(uint code, uint mapType);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern short VkKeyScan(char ch);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
     [DllImport("kernel32.dll")] static extern IntPtr GetStdHandle(int n);
@@ -78,6 +79,15 @@ function Get-VK([string]$name) {
     $special = @{ SPACE = 0x20; TAB = 0x09; ENTER = 0x0D; BACKSPACE = 0x08; INSERT = 0x2D; DELETE = 0x2E;
                   HOME = 0x24; END = 0x23; PAGEUP = 0x21; PAGEDOWN = 0x22 }
     if ($special.ContainsKey($n)) { return $special[$n] }
+    # Any other single character ("²", "&", "é"...): ask Windows which key types it
+    # on the current keyboard layout (e.g. "²" on AZERTY)
+    if ($name.Length -eq 1) {
+        $scan = [VKInput]::VkKeyScan($name[0])
+        if ($scan -ne -1) {
+            if (($scan -shr 8) -band 0x7) { throw "Key '$name' needs a modifier (Shift/AltGr) on this layout: use the base key instead" }
+            return $scan -band 0xFF
+        }
+    }
     throw "Unknown key: '$name'"
 }
 
