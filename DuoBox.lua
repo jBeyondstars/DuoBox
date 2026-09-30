@@ -835,9 +835,30 @@ end
 
 local NPC_ARM_SECONDS = 20
 local npcArmedUntil = 0
+local npcOpened = false -- an NPC window opened since the last D-Talk
 
 local function NpcArmed()
 	return DB.autoNpc and GetTime() < npcArmedUntil
+end
+
+-- Called by /duo npc (D-Talk macro / Talk button), after /assist and before /interact
+local function ArmNpc()
+	if not DB.autoNpc then Print("autonpc est desactive (/duo autonpc on)."); return end
+	npcArmedUntil = GetTime() + NPC_ARM_SECONDS
+	npcOpened = false
+	local name = Val(UnitName("target")) or "le PNJ"
+	if not UnitExists("target") then
+		Print("Parler : le partenaire ne cible rien (il doit cibler le PNJ).")
+		return
+	elseif UnitIsPlayer("target") or UnitCanAttack("player", "target") then
+		Print(("Parler : la cible |cffffd040%s|r n'est pas un PNJ amical."):format(name))
+		return
+	end
+	local armedAt = npcArmedUntil
+	C_Timer.After(1.5, function()
+		if npcOpened or npcArmedUntil ~= armedAt then return end
+		Print(("Parler : aucune fenetre ouverte avec |cffffd040%s|r (trop loin ?). Rapproche-toi puis appuie sur la touche d'interaction (dans les %d s)."):format(name, NPC_ARM_SECONDS))
+	end)
 end
 
 -- Gossip window: turn in completed quests first, then take available ones
@@ -847,7 +868,11 @@ local function HandleGossip()
 		if q.isComplete then C_GossipInfo.SelectActiveQuest(q.questID); return end
 	end
 	local available = C_GossipInfo.GetAvailableQuests() or {}
-	if available[1] then C_GossipInfo.SelectAvailableQuest(available[1].questID) end
+	if available[1] then
+		C_GossipInfo.SelectAvailableQuest(available[1].questID)
+	else
+		Print("Parler : plus de quete a prendre ou a rendre chez ce PNJ.")
+	end
 end
 
 -- Quest greeting window (NPC with several quests and no gossip text)
@@ -872,14 +897,18 @@ end
 -- Macros
 --------------------------------------------------------------------------------
 
+-- Following yourself = stop following. Put before spells with a cast time:
+-- the follow would move the priest and interrupt the cast.
+local STOP_FOLLOW = "/follow player\n"
+
 local function MacroList()
 	local _, class = UnitClass("player")
 	-- In a duo the partner is always party1 (a name with a space would break macros)
 	local T = "party1"
 	-- [mod:shift] = partner's pet, [mod:ctrl] = yourself, otherwise = partner
 	local tgt = ("[mod:shift,@partypet1,help,nodead][mod:ctrl,@player][@%s,help,nodead]"):format(T)
-	local function onTarget(spell)
-		return ("#showtooltip %s\n/cast %s %s"):format(spell, tgt, spell)
+	local function onTarget(spell, stopFollow)
+		return ("#showtooltip %s\n%s/cast %s %s"):format(spell, stopFollow and STOP_FOLLOW or "", tgt, spell)
 	end
 
 	if class == "PRIEST" then
@@ -888,19 +917,19 @@ local function MacroList()
 			{ "D-Wait",    "/follow player" }, -- following yourself = stop following
 			-- Talk to the partner's target (NPC) and accept / turn in its quests
 			{ "D-Talk",    ("#showtooltip\n/assist %s\n/duo npc\n/interact"):format(T) },
-			{ "D-Smite",   ("#showtooltip Smite\n/assist %s\n/cast [harm,nodead] Smite"):format(T) },
+			{ "D-Smite",   ("#showtooltip Smite\n/assist %s\n%s/cast [harm,nodead] Smite"):format(T, STOP_FOLLOW) },
 			{ "D-SWP",     ("#showtooltip Shadow Word: Pain\n/assist %s\n/cast [harm,nodead] Shadow Word: Pain"):format(T) },
-			{ "D-Wand",    ("#showtooltip Shoot\n/assist %s\n/cast [harm,nodead] Shoot"):format(T) },
-			{ "D-LHeal",   onTarget("Lesser Heal") },
-			{ "D-Heal",    onTarget("Heal") },
-			{ "D-Flash",   onTarget("Flash Heal") },
+			{ "D-Wand",    ("#showtooltip Shoot\n/assist %s\n%s/cast [harm,nodead] Shoot"):format(T, STOP_FOLLOW) },
+			{ "D-LHeal",   onTarget("Lesser Heal", true) },
+			{ "D-Heal",    onTarget("Heal", true) },
+			{ "D-Flash",   onTarget("Flash Heal", true) },
 			{ "D-Renew",   onTarget("Renew") },
 			{ "D-Shield",  onTarget("Power Word: Shield") },
 			{ "D-Fort",    onTarget("Power Word: Fortitude") },
 			{ "D-Dispel",  onTarget("Dispel Magic") },
 			{ "D-CureDis", onTarget("Cure Disease") },
 			{ "D-FearWard",onTarget("Fear Ward") },
-			{ "D-Rez",     ("#showtooltip Resurrection\n/cast [@%s,dead] Resurrection"):format(T) },
+			{ "D-Rez",     ("#showtooltip Resurrection\n%s/cast [@%s,dead] Resurrection"):format(STOP_FOLLOW, T) },
 		}
 	elseif class == "HUNTER" then
 		local list = {
@@ -1060,6 +1089,17 @@ btnTarget:SetAttribute("type", "target")
 local btnAssist = MakeButton("Assist", "Assister","Interface\\Icons\\Ability_DualWield", true)
 btnAssist:SetAttribute("type", "macro")
 
+-- Talk: assist the partner, arm DuoBox (/duo npc) and talk to the NPC (= D-Talk macro)
+local btnTalk = MakeButton("Talk", "Parler au PNJ", "Interface\\GossipFrame\\AvailableQuestIcon", true)
+btnTalk:SetAttribute("type", "macro")
+btnTalk.hint = "Cible le PNJ du partenaire, lui parle, accepte / rend ses quetes"
+
+-- Sit (secure macro)
+local btnSit = MakeButton("Sit", "S'asseoir", "Interface\\Icons\\Spell_Nature_Rejuvenation", true)
+btnSit:SetAttribute("type", "macro")
+btnSit:SetAttribute("macrotext", "/sit")
+btnSit.noDesat = true
+
 -- Trade (not protected)
 local btnTrade = MakeButton("Trade", "Echange","Interface\\Icons\\INV_Misc_Coin_01", false)
 btnTrade:SetScript("OnClick", function()
@@ -1163,6 +1203,7 @@ local function BuildPriestButtons()
 	end
 	btnFort = MakeButton("Fort", name or "Power Word: Fortitude", icon or "Interface\\Icons\\Spell_Holy_WordFortitude", true, 2)
 	btnFort.noDesat = true
+	btnFort.modTargets = true
 	btnFort:SetAttribute("type", "spell")
 	btnFort:SetAttribute("spell", name or "Power Word: Fortitude")
 	btnFort:SetAttribute("ctrl-unit", "player")
@@ -1194,6 +1235,7 @@ BuildPriestSpellButtons = function()
 		b:SetAttribute("ctrl-unit", "player")
 		b.hint = MOD_HINT
 		b.noDesat = true
+		b.modTargets = true
 		priestSpellButtons[#priestSpellButtons + 1] = b
 		return b
 	end
@@ -1202,26 +1244,30 @@ BuildPriestSpellButtons = function()
 	partnerSpell("Renew", SPELL.Renew)
 	btnHeal = partnerSpell("Heal", SPELL.LesserHeal) -- switches to "Heal" once it is learned
 	btnHeal.label = "Soin"
+	btnHeal:SetAttribute("type", "macro") -- stops following first, see UpdatePriestSpells
+	btnHeal.hint = MOD_HINT .. "\nArrete le follow avant l'incantation"
 	partnerSpell("Dispel", SPELL.Dispel)
 
 	local rezName, rezIcon = SpellNameIcon(SPELL.Rez)
 	btnRez = MakeButton("Rez", rezName or "Resurrection", rezIcon or "Interface\\Icons\\Spell_Holy_Resurrection", true, 2)
-	btnRez:SetAttribute("type", "spell")
-	btnRez:SetAttribute("spell", rezName)
+	btnRez:SetAttribute("type", "macro")
+	btnRez.spellName = rezName
+	btnRez.hint = "Arrete le follow avant l'incantation"
 
 	-- Assist the partner then attack their target
-	local function assistSpell(key, spellID)
+	local function assistSpell(key, spellID, stopFollow)
 		local name, icon = SpellNameIcon(spellID)
 		local b = MakeButton(key, name or key, icon or "Interface\\Icons\\INV_Misc_QuestionMark", true, 2)
 		b:SetAttribute("type", "macro")
 		b.spellName = name
-		b.hint = "Prend la cible du partenaire puis lance le sort"
+		b.stopFollow = stopFollow
+		b.hint = "Prend la cible du partenaire puis lance le sort" .. (stopFollow and "\nArrete le follow avant l'incantation" or "")
 		b.noDesat = true
 		return b
 	end
-	btnSmite = assistSpell("Smite", SPELL.Smite)
-	btnSWP = assistSpell("SWP", SPELL.SWP)
-	btnWand = assistSpell("Wand", SPELL.Shoot)
+	btnSmite = assistSpell("Smite", SPELL.Smite, true)
+	btnSWP = assistSpell("SWP", SPELL.SWP) -- instant: keeps following
+	btnWand = assistSpell("Wand", SPELL.Shoot, true)
 	btnWand.label = "Baguette"
 
 	local bWait = MakeButton("Wait", "Wait (arreter le follow)", "Interface\\Icons\\Spell_Nature_Sleep", true, 2)
@@ -1253,13 +1299,15 @@ local function UpdatePriestSpells(unit, pet)
 	if btnHeal then
 		local id = Known(SPELL.Heal) and SPELL.Heal or SPELL.LesserHeal
 		local name, icon = SpellNameIcon(id)
-		btnHeal:SetAttribute("spell", name)
+		btnHeal:SetAttribute("macrotext", ("%s/cast [mod:shift,@%s][mod:ctrl,@player][@%s] %s"):format(STOP_FOLLOW, pet, unit, name))
 		if icon then btnHeal.icon:SetTexture(icon) end
 	end
-	if btnRez then btnRez:SetAttribute("unit", unit) end
+	if btnRez and btnRez.spellName then
+		btnRez:SetAttribute("macrotext", ("%s/cast [@%s] %s"):format(STOP_FOLLOW, unit, btnRez.spellName))
+	end
 	for _, b in ipairs({ btnSmite, btnSWP, btnWand }) do
 		if b and b.spellName then
-			b:SetAttribute("macrotext", ("/assist %s\n/cast [harm,nodead] %s"):format(unit, b.spellName))
+			b:SetAttribute("macrotext", ("/assist %s\n%s/cast [harm,nodead] %s"):format(unit, b.stopFollow and STOP_FOLLOW or "", b.spellName))
 		end
 	end
 	if btnDrink then
@@ -1342,6 +1390,7 @@ local function UpdateBar()
 	btnFollow:SetAttribute("macrotext", "/follow " .. unit)
 	btnTarget:SetAttribute("unit", unit)
 	btnAssist:SetAttribute("macrotext", "/assist " .. unit)
+	btnTalk:SetAttribute("macrotext", ("/assist %s\n/duo npc\n/interact"):format(unit))
 	if btnFort then
 		btnFort:SetAttribute("unit", unit)
 		btnFort:SetAttribute("shift-unit", "partypet" .. (idx or 1))
@@ -1356,10 +1405,46 @@ end
 -- Bindings are also in the game menu: Key Bindings > AddOns > DuoBox
 --------------------------------------------------------------------------------
 
+-- Shift / Ctrl variants of the buttons that use them (Shift = pet, Ctrl = yourself).
+-- WoW binds Ctrl+F1..F10 to the stance bar (and Ctrl+1..0 to the pet bar) by default:
+-- Ctrl+F2 then does nothing instead of falling back to F2. Override bindings send
+-- these variants to the button, unless the key was bound to something else on purpose.
+local modOwner = CreateFrame("Frame")
+local modApplied = ""
+
+local function ApplyModifierBindings()
+	if InCombatLockdown() then return end -- redone on PLAYER_REGEN_ENABLED
+	local wanted, list = {}, {}
+	for _, b in ipairs(buttons) do
+		if b.modTargets then
+			for _, key in ipairs({ GetBindingKey(BindCommand(b)) }) do
+				if not key:find("^%u+%-.") then -- base keys only ("F2", not "CTRL-F2")
+					for _, mod in ipairs({ "SHIFT-", "CTRL-" }) do
+						local action = GetBindingAction(mod .. key) or ""
+						if action == "" or action:find("^SHAPESHIFTBUTTON") or action:find("^BONUSACTIONBUTTON") then
+							wanted[mod .. key] = b:GetName()
+							list[#list + 1] = mod .. key .. "=" .. b:GetName()
+						end
+					end
+				end
+			end
+		end
+	end
+	table.sort(list)
+	local signature = table.concat(list, ",")
+	if signature == modApplied then return end -- changing them fires UPDATE_BINDINGS again
+	modApplied = signature
+	ClearOverrideBindings(modOwner)
+	for key, name in pairs(wanted) do
+		SetOverrideBindingClick(modOwner, false, key, name, "LeftButton")
+	end
+end
+
 local function UpdateHotkeys()
 	for _, b in ipairs(buttons) do
 		if b.bindable then b.hotkey:SetText(ShortKey(GetBindingKey(BindCommand(b)))) end
 	end
+	ApplyModifierBindings()
 end
 
 local keys = CreateFrame("Frame", "DuoBoxKeys", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
@@ -1516,6 +1601,7 @@ end
 BINDING_HEADER_DUOBOX = "DuoBox"
 for key, label in pairs({
 	Follow = "Follow partenaire", Target = "Cibler partenaire", Assist = "Assister partenaire",
+	Talk = "Parler au PNJ du partenaire (quetes)", Sit = "S'asseoir",
 	Trade = "Echange avec partenaire", Invite = "Inviter partenaire", Quests = "Comparer les quetes",
 	LastQuest = "Partager la derniere quete", Fort = "Robustesse (pretre)",
 	Shield = "Bouclier (pretre)", Renew = "Renovation (pretre)", Heal = "Soin (pretre)",
@@ -1591,6 +1677,7 @@ f:SetScript("OnEvent", function(self, event, ...)
 		end
 
 	elseif event == "QUEST_DETAIL" then
+		npcOpened = true
 		if DB.autoQuest and IsPartnerName(UnitName("questnpc")) then
 			justReceivedFromPartner = true
 			AcceptQuest()
@@ -1599,15 +1686,19 @@ f:SetScript("OnEvent", function(self, event, ...)
 		end
 
 	elseif event == "GOSSIP_SHOW" then
+		npcOpened = true
 		if NpcArmed() then HandleGossip() end
 
 	elseif event == "QUEST_GREETING" then
+		npcOpened = true
 		if NpcArmed() then HandleGreeting() end
 
 	elseif event == "QUEST_PROGRESS" then
+		npcOpened = true
 		if NpcArmed() and IsQuestCompletable() then CompleteQuest() end
 
 	elseif event == "QUEST_COMPLETE" then
+		npcOpened = true
 		if NpcArmed() then HandleQuestComplete() end
 
 	elseif event == "QUEST_ACCEPT_CONFIRM" then
@@ -1695,6 +1786,7 @@ f:SetScript("OnEvent", function(self, event, ...)
 
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		if barPending then UpdateBar() end
+		ApplyModifierBindings()
 
 	elseif event == "UI_ERROR_MESSAGE" then
 		-- Depending on the version: (messageType, message) or (message)
@@ -1769,8 +1861,8 @@ SlashCmdList.DUOBOX = function(input)
 			if not DB.facing then facingFrame:Hide() end
 		end
 	elseif cmd == "npc" then
-		-- called by the D-Talk macro: arm NPC quest handling for a short time
-		npcArmedUntil = GetTime() + NPC_ARM_SECONDS
+		-- called by the D-Talk macro / Talk button: arm NPC quest handling for a short time
+		ArmNpc()
 	elseif cmd == "keys" then
 		ToggleKeys()
 	elseif cmd == "move" then

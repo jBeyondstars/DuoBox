@@ -67,10 +67,12 @@ The role is automatic (priest = heal, hunter = dps). Thresholds: `/duo hp 50`, `
 Always shown, semi-transparent, opaque on mouse-over. Shift+drag to move it, `/duo bar off` to hide it,
 `/duo scale 1.3` to resize it. Icons are greyed out when the partner is not in the group.
 
-- **Row 1**: **Follow** · **Target** · **Assist** · **Trade** · **Invite** · **Compare quests** · **Share last quest** · **Key bindings** (gear).
+- **Row 1**: **Follow** · **Target** · **Assist** · **Talk** (same as the D-Talk macro) · **Sit** (`/sit`) · **Trade** · **Invite** · **Compare quests** · **Share last quest** · **Key bindings** (gear).
 - **Row 2 (priest only)**: **Fortitude** · **Shield** · **Renew** · **Heal** (Lesser Heal, then Heal once learned) · **Dispel** ·
   **Resurrection** · **Smite**, **Shadow Word: Pain** and **Wand** (assist the hunter + spell) · **Wait** (stop following) · **Drink** (best drink in your bags for your level).
 - Fortitude / Shield / Renew / Heal / Dispel: click = partner, **Shift** = partner's pet, **Ctrl** = yourself.
+- **Heal**, **Resurrection**, **Smite** and **Wand** stop following before casting (moving would interrupt the cast):
+  follow again afterwards.
   Fortitude gets a golden border when a buff is missing or expires in less than 2 minutes (out of combat only).
 - **Compare quests** shares your quests that the partner is missing and tells you which ones they have in addition
   (then click "Compare" on their window).
@@ -98,6 +100,9 @@ the bottom-right corner of the cast bar resizes it. Type `/duo move` again to sa
 Gear button at the end of the bar, or `/duo keys`. Click a row, then press a key
 (Shift/Ctrl/Alt modifiers and mouse buttons 3-5 are accepted); right-click a row to clear it. The key is shown on the button.
 The same actions are also in the game menu: Key Bindings → AddOns → DuoBox.
+For Fortitude / Shield / Renew / Heal / Dispel, DuoBox also routes Shift+key and Ctrl+key to the button
+(WoW binds Ctrl+F1..F10 to the stance bar by default, which would swallow Ctrl+F2). A Shift/Ctrl+key you bound
+yourself to another action is left alone.
 
 ## 4. Macros created by `/duo macros`
 ### Priest (target = hunter; **Shift** = pet, **Ctrl** = yourself)
@@ -116,6 +121,8 @@ The same actions are also in the game menu: Key Bindings → AddOns → DuoBox.
 | D-Rez | Resurrection on the hunter | `V` |
 
 Example: `Shift+E` = shield on the pet, `Ctrl+1` = heal yourself.
+Spells with a cast time (D-Smite, D-Wand, D-LHeal, D-Heal, D-Flash, D-Rez) stop following first (`/follow player`),
+otherwise the follow moves the priest and interrupts the cast. Follow again afterwards (D-Follow / "follow").
 
 ### Hunter
 | Macro | Effect |
@@ -131,7 +138,11 @@ Example: `Shift+E` = shield on the pet, `Ctrl+1` = heal yourself.
 **D-Talk**: the macro targets the partner's target, arms DuoBox for 20 s (`/duo npc`) and interacts with the NPC (`/interact`).
 While armed, DuoBox opens the NPC's quests, turns in completed ones first, accepts available ones, and takes the reward
 when there is no choice (with a choice it alerts you and waits). Talking to an NPC by hand is never automated.
+The **Talk** button of the bar does the same and can be bound with `/duo keys` (e.g. `T`, the key of the "talk" voice command),
+so the macro does not need to be on an action bar.
 You must be in interaction range (walk closer, or enable "Click-to-Move" so the interaction walks to the NPC).
+DuoBox tells you in the chat when it fails: partner has no target, target is not a friendly NPC, or no window
+opened after 1.5 s (too far: walk closer and press the interact key, "interact" / `²`, within the 20 s).
 `/duo autonpc off` disables it.
 
 Spell names are in English (enUS client). A spell not learned yet shows "?" and does nothing.
@@ -165,6 +176,7 @@ and downloads the English model `vosk-model-small-en-us-0.15` (~40 MB) into `Voi
   To bind: click a row in `/duo keys`, then **say the phrase**: VoiceKeys sends the key and it gets recorded.
   Same for the D-xxx macros through the game's Key Bindings menu.
 - The "pet" commands send Shift + the same key: Shift = pet on the DuoBox buttons and the D-xxx macros.
+  "buff yourself" / "heal yourself" send Ctrl + the same key: Ctrl = yourself.
 - With a single PC, the key goes to whichever WoW window is active: speak while the priest window is focused.
 
 | Phrase | Key | Phrase | Key |
@@ -178,6 +190,8 @@ and downloads the English model `vosk-model-small-en-us-0.15` (~40 MB) into `Voi
 | renew | F5 | wand | F12 |
 | renew pet | Shift+F5 | interact | ² |
 | talk | T (D-Talk macro) | dot | Y (Shadow Word: Pain) |
+| buff yourself | Ctrl+F2 | heal yourself | Ctrl+F7 |
+| sit | F6 (Sit button) | | |
 
 Settings in `commands.json`:
 - `commands`: key and phrases (several phrases per command are allowed).

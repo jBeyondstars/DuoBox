@@ -2,6 +2,8 @@
 	<Binding name="CLICK DuoBoxBtnFollow:LeftButton" header="DUOBOX" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnTarget:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnAssist:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnTalk:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnSit:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnTrade:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnInvite:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnQuests:LeftButton" category="ADDONS"/>

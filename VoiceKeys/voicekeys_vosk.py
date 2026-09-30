@@ -234,11 +234,14 @@ def rms(data):
 
 
 class NoiseGate:
-    """Replaces audio quieter than the voice with true silence.
+    """Cuts the microphone stream into phrases: only audio louder than the voice
+    (plus a short pre-roll and hang-over) reaches Vosk, and the phrase is closed as
+    soon as it gets quiet again.
 
-    Without it, steady background noise (fan, mic hiss, game sound) never lets Vosk
-    detect the end of a phrase; after ~20-30 s it is forced to conclude and matches
-    that long noise to the closest command: a "ghost" spell with no one speaking.
+    Quiet audio is never fed, not even as digital silence: Vosk then never saw the
+    end of a phrase, glued clicks and noises together for 20-30 s, was forced to
+    conclude and matched them to the closest command ("heal", confidence 1.00,
+    0.0 s, with no one speaking).
     """
 
     def __init__(self, threshold, hangover_blocks=4, preroll_blocks=2):
@@ -246,25 +249,48 @@ class NoiseGate:
         self.hangover = hangover_blocks            # stays open 0.5 s after the last loud block
         self.preroll = collections.deque(maxlen=preroll_blocks)  # so word onsets are not cut
         self.open_left = 0
-        self.voiced_blocks = 0                     # voiced audio in the current phrase
+        self.voiced_blocks = 0                     # audio fed in the current phrase
 
     def process(self, data):
-        """Returns the blocks to feed to the recognizer."""
+        """Returns (blocks to feed to the recognizer, True when the phrase just ended)."""
         if rms(data) >= self.threshold:
             out = list(self.preroll) if self.open_left == 0 else []
             self.preroll.clear()
             self.open_left = self.hangover
             self.voiced_blocks += 1
-            return out + [data]
+            return out + [data], False
         if self.open_left > 0:
             self.open_left -= 1
             self.voiced_blocks += 1
-            return [data]
+            return [data], self.open_left == 0
         self.preroll.append(data)
-        return [bytes(len(data))]
+        return [], False
 
-    def voiced_seconds(self):
-        return self.voiced_blocks * BLOCK / SAMPLE_RATE
+    def take_voiced_seconds(self):
+        """Length of the current phrase, then resets it."""
+        seconds = self.voiced_blocks * BLOCK / SAMPLE_RATE
+        self.voiced_blocks = 0
+        return seconds
+
+
+def recognize(rec, gate, data):
+    """Feeds one audio block. Returns the phrase that just ended as
+    (text, confidence, voiced seconds), or None."""
+    blocks, ended = gate.process(data) if gate else ([data], False)
+    results = []
+    for block in blocks:
+        if rec.AcceptWaveform(block):
+            results.append(rec.Result())
+    if ended:
+        results.append(rec.FinalResult())  # the gate closed: end of the phrase
+    if not results:
+        return None
+    voiced = gate.take_voiced_seconds() if gate else 0.0
+    phrases = [r for r in map(result_text_and_conf, results) if r[0]]
+    if not phrases:
+        return None
+    text, conf = phrases[-1]
+    return text, conf, voiced
 
 
 def calibrate(audio, cfg):
@@ -354,19 +380,10 @@ def main():
         gate = NoiseGate(threshold) if threshold else None
 
         while True:
-            data = audio.get()
-            results = []
-            for block in (gate.process(data) if gate else [data]):
-                if rec.AcceptWaveform(block):
-                    results.append(result_text_and_conf(rec.Result()))
-            if not results:
+            phrase = recognize(rec, gate, audio.get())
+            if not phrase:
                 continue
-            voiced = gate.voiced_seconds() if gate else 0.0
-            if gate:
-                gate.voiced_blocks = 0
-            text, conf = results[-1]
-            if not text:
-                continue
+            text, conf, voiced = phrase
             # Commands are short: a long "phrase" is noise or conversation
             if voiced > max_utterance:
                 if cfg.get("showIgnored"):
