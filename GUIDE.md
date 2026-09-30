@@ -209,3 +209,35 @@ Settings in `commands.json`:
 - `showIgnored`: shows what was heard but is not a command (useful to tune phrases).
 
 Test without microphone or key presses: `Start-VoiceKeys-Vosk.bat --selftest` or `Lancer-VoiceKeys.bat -SelfTest`.
+
+### Hunter combat-exit notifications in the terminal
+
+Reload the hunter's interface (`/reload`) after installing this change. DuoBox shows nine tiny colored squares
+near the top-left corner of the hunter's game area. `/duo combatlog on` enables this signal (on by default),
+and `/duo combatlog off` hides it. This is DuoBox's screen signal, not WoW's `/combatlog` file logging command.
+
+- **With Vosk**: start `Start-VoiceKeys-Vosk.bat` as usual. Notifications share its terminal with voice commands.
+- **Without voice recognition**, or alongside the Windows speech engine: start `Start-CombatMonitor.bat`.
+  It only needs Python 3 (uses the existing `.venv` if present), without a microphone, model or extra packages.
+  Run just one combat monitor to avoid duplicate notifications in different terminals.
+
+Run the reader on the hunter's PC. It automatically finds visible WoW windows, including on another monitor
+and when the priest or terminal has focus. Keep the hunter in windowed/windowed fullscreen mode and keep
+its colored squares visible: a minimized window, another window covering the squares, a hidden interface,
+or some fullscreen/HDR capture configurations can prevent reading. The terminal reports a lost signal after
+two seconds; when visible again, the counter recovers exits from the same interface session (up to 4095).
+A `/reload` creates a new session and baseline. Exits before the first confirmed reading are not announced.
+
+After the initial `Combat : hunter detecte` message, each `PLAYER_REGEN_ENABLED` event on the hunter produces:
+
+```text
+[18:42:07] HUNTER : sortie de combat (World of Warcraft, PID 1234).
+```
+
+This tracks the hunter leaving combat, including Feign Death when it actually clears combat; it does not
+claim that all enemies are dead or that the priest/pet has left combat. Timestamps are the reader's local
+detection time; recovered events share the recovery time. No keys or game actions are sent by the monitor.
+
+In `commands.json`, `combatMonitor.enabled` turns the reader on/off and `combatMonitor.pollIntervalMs`
+sets the interval (100 ms by default, 50–5000 ms accepted). `Start-VoiceKeys-Vosk.bat --no-combat-monitor`
+disables it for one voice session. The Vosk `--selftest`, `--devices` and `--level` modes do not start it.

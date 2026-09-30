@@ -17,6 +17,7 @@
     "beepOnNotFocused": true,
     "beepOnSuccess": false,
     "processNames": [ "WowB", "Wow", "WowClassic", "WowClassicB" ],
+    "combatMonitor": { "enabled": true, "pollIntervalMs": 100 },
     "pausePhrases": [ "stop listening" ],
     "resumePhrases": [ "start listening" ],
     "commands": [

@@ -28,6 +28,7 @@ local defaults = {
 	bar         = true,   -- Follow / Target / Trade button bar
 	barScale    = 1,      -- bar scale (/duo scale)
 	castbar     = true,   -- priest cast bar + errors on the hunter's screen
+	combatMonitor = true, -- visible hunter combat-exit counter for the terminal reader
 	facing      = true,   -- priest facing indicator
 	facingInvert = false, -- swap left/right if the direction is wrong
 	facingDist  = 25,     -- estimated hunter -> target distance (yards)
@@ -125,6 +126,51 @@ local function SendComm(msg)
 	if not IsInGroup() then return end
 	local send = (C_ChatInfo and C_ChatInfo.SendAddonMessage) or SendAddonMessage
 	if send then send(PREFIX, msg, "PARTY") end
+end
+
+--------------------------------------------------------------------------------
+-- Read-only screen signal for VoiceKeys/combat_monitor.py (hunter client only).
+-- Nine opaque 8px cells: magic x3, session x2, counter x2, checksum, end magic.
+-- Each data cell encodes 6 bits with channel levels 32/96/160/224. No key input.
+--------------------------------------------------------------------------------
+
+local combatSignal = CreateFrame("Frame", "DuoBoxCombatSignal", UIParent)
+combatSignal:SetSize(72, 8)
+combatSignal:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 12, -12)
+combatSignal:SetFrameStrata("TOOLTIP")
+combatSignal:SetFrameLevel(100)
+combatSignal:SetIgnoreParentAlpha(true)
+combatSignal:EnableMouse(false)
+combatSignal.cells = {}
+for i = 1, 9 do
+	local cell = combatSignal:CreateTexture(nil, "OVERLAY")
+	cell:SetSize(8, 8)
+	cell:SetPoint("TOPLEFT", combatSignal, "TOPLEFT", (i - 1) * 8, 0)
+	combatSignal.cells[i] = cell
+end
+combatSignal:Hide()
+
+local combatSession, combatExits = 0, 0
+
+local function UpdateCombatSignal()
+	local _, class = UnitClass("player")
+	if not DB or not DB.combatMonitor or class ~= "HUNTER" then combatSignal:Hide(); return end
+	-- Keep the wire format at physical pixel size, independently of WoW UI scale.
+	combatSignal:SetScale(1 / UIParent:GetEffectiveScale())
+	combatSignal:SetAlpha(1)
+	local cells = combatSignal.cells
+	cells[1]:SetColorTexture(1, 0, 1, 1)
+	cells[2]:SetColorTexture(0, 1, 1, 1)
+	cells[3]:SetColorTexture(1, 1, 0, 1)
+	cells[9]:SetColorTexture(0, 1, 0, 1)
+	local values = { math.floor(combatSession / 64), combatSession % 64,
+		math.floor(combatExits / 64), combatExits % 64 }
+	values[5] = (values[1] + values[2] + values[3] + values[4]) % 64
+	for i, value in ipairs(values) do
+		cells[i + 3]:SetColorTexture((32 + math.floor(value / 16) * 64) / 255,
+			(32 + math.floor(value / 4) % 4 * 64) / 255, (32 + value % 4 * 64) / 255, 1)
+	end
+	combatSignal:Show()
 end
 
 --------------------------------------------------------------------------------
@@ -1632,6 +1678,8 @@ f:RegisterEvent("AUTOFOLLOW_END")
 f:RegisterEvent("CHAT_MSG_ADDON")
 f:RegisterEvent("GROUP_ROSTER_UPDATE")
 f:RegisterEvent("PLAYER_REGEN_ENABLED")
+f:RegisterEvent("UI_SCALE_CHANGED")
+f:RegisterEvent("DISPLAY_SIZE_CHANGED")
 f:RegisterEvent("UPDATE_BINDINGS")
 f:RegisterEvent("UI_ERROR_MESSAGE")
 -- New spell rank / drink / level: update the priest buttons
@@ -1649,6 +1697,10 @@ f:SetScript("OnEvent", function(self, event, ...)
 		DB = DuoBoxDB
 
 	elseif event == "PLAYER_LOGIN" then
+		-- Persist the generation so /reload cannot rewind the same session counter.
+		DB.combatSignalSession = ((tonumber(DB.combatSignalSession) or math.random(0, 4095)) + 1) % 4096
+		combatSession = DB.combatSignalSession
+		UpdateCombatSignal()
 		if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
 			C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
 		elseif RegisterAddonMessagePrefix then
@@ -1785,8 +1837,16 @@ f:SetScript("OnEvent", function(self, event, ...)
 		if DB then UpdateBar() end
 
 	elseif event == "PLAYER_REGEN_ENABLED" then
+		local _, class = UnitClass("player")
+		if class == "HUNTER" then
+			combatExits = (combatExits + 1) % 4096
+			UpdateCombatSignal()
+		end
 		if barPending then UpdateBar() end
 		ApplyModifierBindings()
+
+	elseif event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
+		UpdateCombatSignal()
 
 	elseif event == "UI_ERROR_MESSAGE" then
 		-- Depending on the version: (messageType, message) or (message)
@@ -1831,6 +1891,9 @@ SlashCmdList.DUOBOX = function(input)
 	elseif cmd == "role" and (arg == "heal" or arg == "dps") then
 		DB.role = arg
 		Print("role = " .. arg)
+	elseif cmd == "combatlog" then
+		OnOff("combatMonitor", arg:lower())
+		UpdateCombatSignal()
 	elseif (cmd == "hp" or cmd == "pet" or cmd == "mana") and tonumber(arg) then
 		local key = cmd == "hp" and "hpPartner" or cmd == "pet" and "hpPet" or "manaPartner"
 		DB[key] = tonumber(arg)
@@ -1889,6 +1952,7 @@ SlashCmdList.DUOBOX = function(input)
 		Print("  /duo macros          - cree/maj les macros de ta classe")
 		Print("  /duo cvars           - son + FPS en arriere-plan, auto-loot")
 		Print("  /duo test            - teste l'alerte")
+		Print("  /duo combatlog [on|off] - signal visuel des sorties de combat du chasseur pour le terminal")
 		Print("  /duo hp|pet|mana <n> - seuils d'alerte en %")
 		Print("  /duo bar [on|off]    - barre Follow / Cibler / Echange (Maj+glisser pour deplacer)")
 		Print("  /duo scale <0.5-2>   - taille de la barre (1 = normal)")

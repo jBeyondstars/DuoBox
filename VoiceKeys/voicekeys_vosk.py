@@ -20,6 +20,7 @@ Usage:
 import argparse
 import array
 import collections
+from contextlib import nullcontext
 import ctypes
 import math
 import json
@@ -29,6 +30,8 @@ import sys
 import time
 import winsound
 from ctypes import wintypes
+
+from combat_monitor import CombatMonitor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SAMPLE_RATE = 16000
@@ -324,6 +327,7 @@ def main():
     ap.add_argument("--selftest", action="store_true", help="check config, model and keys, no microphone")
     ap.add_argument("--devices", action="store_true", help="list audio input devices")
     ap.add_argument("--level", action="store_true", help="show the live microphone level (to tune noiseGate)")
+    ap.add_argument("--no-combat-monitor", action="store_true", help="disable hunter combat-exit notifications")
     args = ap.parse_args()
 
     import sounddevice as sd
@@ -368,7 +372,8 @@ def main():
     cooldown = cfg.get("cooldownMs", 800) / 1000
     max_utterance = cfg.get("maxUtteranceSec", 4.0)
 
-    with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=BLOCK, device=device,
+    monitor = nullcontext() if args.no_combat_monitor or args.level else CombatMonitor(cfg, log)
+    with monitor, sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=BLOCK, device=device,
                            dtype="int16", channels=1, callback=on_audio):
         if args.level:
             log("Live microphone level (Ctrl+C to stop): speak, then stay silent.", "cyan")
