@@ -10,10 +10,11 @@ Bind F7 to Heal with `/duo keys`, then speak while the priest's WoW client is fo
 VoiceKeys is optional: **1 phrase = 1 key**, sent to the active client on the same PC.
 The diagram shows a few examples; see the [VoiceKeys setup and full command list](GUIDE.md#6-voicekeys-voice-commands-optional) for more.
 
-- Cross-client alerts (low health, aggro, OOM, follow lost) with sound and taskbar flash
+- Cross-client alerts (low health, aggro, OOM, follow lost, quest item not looted) with sound and taskbar flash
 - Priest cast bar and facing hints on the hunter's screen
 - Auto-accept invites, quests and resurrections from the partner; quest sharing and comparison
 - RestedXP: each objective also shows the partner's progress, and the guide waits until both are done
+- Options panel (`/duo` or the minimap button): every setting and action without typing commands
 - Button bar with key bindings (`/duo keys`) and class macros (`/duo macros`)
 - Optional **VoiceKeys**: offline voice commands (Vosk or Windows speech), one phrase = one key
 - Optional hunter combat-exit notifications (feature flag disabled by default)
@@ -23,4 +24,4 @@ Copy the `DuoBox` folder into `World of Warcraft\_classic_\Interface\AddOns\` on
 ```
 /duo partner <OtherCharacterName>
 ```
-Type `/duo` for all commands. Full documentation: [GUIDE.md](GUIDE.md).
+Type `/duo` (or click the minimap button) to open the options panel, `/duo help` for all commands. Full documentation: [GUIDE.md](GUIDE.md).

@@ -45,14 +45,19 @@ Everything is designed around **"one key press = one action in one game client"*
 Game options → Interface: **"Use Raid-Style Party Frames"** on the priest (large, readable frames).
 
 ## 3. DuoBox setup (on each character)
+Everything in this guide can be done from the **options panel**: type `/duo` or click the DuoBox minimap button
+(left click: panel, right click: key bindings, drag: move the button; `/duo minimap off` hides it). It is also listed in
+the game options under AddOns → DuoBox. Tabs: General (partner, role, actions such as macros, key bindings, alert test,
+CVars, move mode), Alerts (sound, flash, thresholds), Automation, Display, RestedXP. `/duo help` lists the equivalent commands.
 ```
 /duo partner PriestName      (on the hunter)
 /duo partner HunterName      (on the priest)
 /duo macros                  (creates the D-xxx macros in the character tab of /macro)
 /duo test                    (switch to the other window: this one must beep and flash)
 ```
-Only the first name matters (`Multi`, `Multi Boxing` and `Multi-Realm` all match).
-The role is automatic (priest = heal, hunter = dps). Thresholds: `/duo hp 50`, `/duo pet 35`, `/duo mana 20`.
+Only the first name matters (`Multi`, `Multi Boxing` and `Multi-Realm` all match). Both characters may share the same
+first name (`Duo Box` and `Duo Boxtwo`): each client ignores its own messages.
+The role is automatic (priest = heal, hunter = dps; `/duo role heal|dps|auto` to force it). Thresholds: `/duo hp 50`, `/duo pet 35`, `/duo mana 20`.
 `/duo status` shows the current settings and the detected partner unit (it must be `party1`).
 
 ### Alerts
@@ -62,6 +67,13 @@ The role is automatic (priest = heal, hunter = dps). Thresholds: `/duo hp 50`, `
 - **On both clients: quest not turned in.** When one character turns in a quest that the other still has in its log,
   the other gets 15 s to turn it in too (D-Talk / "talk"); after that both screens get an alert with the quest name
   ("(pas terminee)" when it is not complete yet). `/duo turnin off` disables it.
+- **On both clients: quest not taken by the priest.** When the hunter accepts a quest, the priest gets 10 s to have it
+  too (automatic share, or D-Talk / "talk" when the quest cannot be shared); after that both screens get an alert with
+  the quest name. `/duo accept off` disables it.
+- **On both clients: quest item not looted.** When one character loots a quest item that the other still needs
+  (quest items drop for each character on the quest), the other gets 10 s to loot its copy; after that both screens
+  get an alert with the item name. It compares the item counts of the quest objective, so looting before the partner
+  is fine too. `/duo loot off` disables it.
 - A small movable status frame shows the partner's health, mana and follow state.
 - **Aggro on the priest** is detected from threat, from a mob targeting the priest (enemy nameplates must be shown, `V` key)
   or from damage taken, and triggers a sound alert on both screens.
@@ -111,7 +123,8 @@ yourself to another action is left alone.
 RestedXP only tracks the quests of the character it runs on. DuoBox sends each character's quest progress to the partner,
 so the guide also counts the partner:
 - Each quest objective of the current step shows the partner's count after yours, for example
-  `Kobold Vermin slain: 10/10 [Multi 6/10]` (yellow: in progress, green: done, orange: the partner does not have the quest).
+  `Kobold Vermin slain: 10/10 [Priest 6/10]` (the partner's class; yellow: in progress, green: done,
+  orange: the partner does not have the quest).
 - The objective is only checked once **both** characters have finished it, so the guide does not move on
   while the partner still needs kills or items. Ticking the objective's box by hand still skips it.
 - DuoBox must be up to date on both characters; RestedXP is only needed on the character that shows the guide.

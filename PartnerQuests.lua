@@ -1,17 +1,20 @@
 --------------------------------------------------------------------------------
--- DuoBox / RestedXP: the partner's quest objectives in the RestedXP guide.
--- Each client sends its quest log progress to the partner (addon messages).
--- In RestedXP, each quest objective shows the partner's count, and the step
--- waits until the partner has finished the objective too (/duo rxp hold).
+-- DuoBox / partner quests: each client sends its quest log progress to the
+-- partner (addon messages). Used for:
+--   * RestedXP: each quest objective of the guide shows the partner's count,
+--     and the step waits until the partner has finished it too (/duo rxp).
+--   * Quest loot reminder: when the partner loots a quest item that you still
+--     need and you do not loot yours within 10 s, both screens get an alert.
 -- The partner only needs DuoBox: RestedXP is used on the client that shows it.
 --------------------------------------------------------------------------------
 
 local _, ns = ...
 
 local PREFIX = "DUOBOX"
-local MAX_MSG = 240 -- addon messages are limited to 255 characters
+local MAX_MSG = 240    -- addon messages are limited to 255 characters (tag included)
+local LOOT_WINDOW = 10 -- seconds to loot your copy of a quest item looted by the partner
 
-local Print, SendComm, IsPartnerName, PartnerUnit = ns.Print, ns.SendComm, ns.IsPartnerName, ns.PartnerUnit
+local Print, Alert, SendComm, FromPartner, PartnerUnit = ns.Print, ns.Alert, ns.SendComm, ns.FromPartner, ns.PartnerUnit
 local function DB() return ns.GetDB() end
 
 local function Val(v)
@@ -20,9 +23,9 @@ local function Val(v)
 end
 
 --------------------------------------------------------------------------------
--- Own quest log -> compact state per quest: "C" (ready to turn in) or
--- "done/required,done/required,...". Read like RestedXP does (quest log
--- leaderboards) so objective indexes match its guide steps.
+-- Own quest log. Read like RestedXP does (quest log leaderboards) so objective
+-- indexes match its guide steps. Sent as "C" (ready to turn in) or
+-- "done/required,done/required,..." per quest.
 --------------------------------------------------------------------------------
 
 local function NumEntries()
@@ -42,28 +45,26 @@ local function Entry(i)
 	return id, info.isHeader, info.isCollapsed, id and C_QuestLog.IsComplete and C_QuestLog.IsComplete(id) or false
 end
 
-local function Objectives(i, questID)
-	local list = {}
-	local n = GetNumQuestLeaderBoards and GetNumQuestLeaderBoards(i) or 0
-	for j = 1, n do
-		local text, kind, finished = GetQuestLogLeaderBoard(j, i)
-		local done, required
-		if kind == "progressbar" and GetQuestProgressBarPercent then
-			done, required = math.floor(GetQuestProgressBarPercent(questID) or 0), 100
-		elseif text then
-			done, required = text:match("(%d+)/(%d+)")
-			done, required = tonumber(done), tonumber(required)
-		end
-		if not (done and required) then
-			done, required = finished and 1 or 0, 1
-		elseif finished and done < required then
-			done = required
-		end
-		list[j] = done .. "/" .. required
+-- Objective j of the quest at log index i: done, required, kind ("item", "monster"...), text
+local function ReadObjective(i, j, questID)
+	local text, kind, finished = GetQuestLogLeaderBoard(j, i)
+	local done, required
+	if kind == "progressbar" and GetQuestProgressBarPercent then
+		done, required = math.floor(GetQuestProgressBarPercent(questID) or 0), 100
+	elseif text then
+		done, required = text:match("(%d+)/(%d+)")
+		done, required = tonumber(done), tonumber(required)
 	end
-	return table.concat(list, ",")
+	if not (done and required) then
+		done, required = finished and 1 or 0, 1
+	elseif finished and done < required then
+		done = required
+	end
+	return done, required, kind, text
 end
 
+-- Returns the encoded states { [questID] = "C" | "d/r,..." } and the own
+-- objectives { [questID] = "C" | { {done, required, kind, text}, ... } }
 local function Snapshot()
 	local n = NumEntries()
 	for i = 1, n do
@@ -74,19 +75,117 @@ local function Snapshot()
 			break
 		end
 	end
-	local snap = {}
+	local snap, own = {}, {}
 	for i = 1, n do
 		local questID, isHeader, _, isComplete = Entry(i)
 		if questID and questID > 0 and not isHeader then
-			snap[questID] = isComplete and "C" or Objectives(i, questID)
+			if isComplete then
+				snap[questID], own[questID] = "C", "C"
+			else
+				local list, objs = {}, {}
+				for j = 1, (GetNumQuestLeaderBoards and GetNumQuestLeaderBoards(i) or 0) do
+					local done, required, kind, text = ReadObjective(i, j, questID)
+					list[j] = done .. "/" .. required
+					objs[j] = { done, required, kind, text }
+				end
+				snap[questID], own[questID] = table.concat(list, ","), objs
+			end
 		end
 	end
-	return snap
+	return snap, own
+end
+
+-- Count gained on each objective between two states ("C" or { {done, required}, ... })
+local function Gains(old, new)
+	local gains = {}
+	if type(old) ~= "table" or new == nil then return gains end
+	for j, o in ipairs(old) do
+		local now = new == "C" and o[2] or (type(new) == "table" and new[j] and new[j][1])
+		local gain = now and math.min(now, o[2]) - o[1] or 0
+		if gain > 0 then gains[j] = gain end
+	end
+	return gains
+end
+
+--------------------------------------------------------------------------------
+-- Partner's quest log and display name
+--------------------------------------------------------------------------------
+
+local partnerQuests = {} -- [questID] = "C" or { {done, required}, ... }
+local synced = false     -- a full quest log was received from the partner
+local ownQuests = {}     -- last own objectives read (Snapshot)
+
+local function Parse(state)
+	if state == "C" then return "C" end
+	local list = {}
+	for done, required in state:gmatch("(%d+)/(%d+)") do
+		list[#list + 1] = { tonumber(done), tonumber(required) }
+	end
+	return list
+end
+
+-- Class name ("Pretre"), clearer than the first name when both characters share it
+local function PartnerLabel()
+	local unit = PartnerUnit()
+	local label = unit and (Val(UnitClass(unit)) or Val(UnitName(unit)))
+	if not label and DB().partner then label = DB().partner:match("^[^%s%-]+") end
+	return label or "Partenaire"
+end
+
+--------------------------------------------------------------------------------
+-- Quest loot reminder. Quest items drop for each character on the quest, so
+-- LOOT_WINDOW seconds after the partner loots one, your count of that item
+-- should have caught up with theirs. A gap that existed before their loot
+-- does not count, and a gap is only reported once.
+--------------------------------------------------------------------------------
+
+local alerted = {} -- ["questID:obj"] = gap already reported
+
+local function ItemName(text)
+	local name = (text or ""):gsub("%s*:%s*%d+%s*/%s*%d+%s*$", "")
+	return name ~= "" and name or (text or "?")
+end
+
+-- Own item objective still in progress: done, required, text (nil otherwise)
+local function OwnItem(questID, j)
+	local own = ownQuests[questID]
+	local o = type(own) == "table" and own[j]
+	if o and o[3] == "item" and o[1] < o[2] then return o[1], o[2], o[4] end
+end
+
+local function PartnerDone(questID, j)
+	local q = partnerQuests[questID]
+	if q == "C" then return math.huge end -- quest complete: every objective done
+	local o = type(q) == "table" and q[j]
+	return o and o[1]
+end
+
+local function CheckLoot(questID, j, before)
+	local done, required, text = OwnItem(questID, j)
+	local partner = PartnerDone(questID, j)
+	if not (done and partner and DB().lootAlert) then return end
+	local key = questID .. ":" .. j
+	local gap = math.min(partner, required) - done
+	if gap <= math.max(before, alerted[key] or 0) then return end
+	alerted[key] = gap
+	local item = ItemName(text)
+	Alert("loot", "Objet de quete a looter : " .. item, ns.SOUND_NOTICE, 3)
+	Print("|cffffd040objet de quete pas loot|r : " .. item)
+	SendComm("LM:" .. item:sub(1, 200))
+end
+
+-- The partner's count of objective j went up from partnerBefore
+local function PartnerLoot(questID, j, partnerBefore)
+	local done = OwnItem(questID, j)
+	if not done then return end -- not an item you still need
+	local before = math.max(partnerBefore - done, 0)
+	C_Timer.After(LOOT_WINDOW, function() CheckLoot(questID, j, before) end)
 end
 
 --------------------------------------------------------------------------------
 -- Sending: "RXA" = send me your quest log, "RXF:..." = full quest log (the
 -- receiver starts from scratch), "RXQ:..." = changes. Entries: id=state;id=X
+-- "LM:item" = I did not loot this quest item.
 --------------------------------------------------------------------------------
 
 local lastSent = {}    -- [questID] = state last sent to the partner
@@ -116,7 +215,15 @@ local ScheduleFlush
 
 local function Flush()
 	if not PartnerUnit() then return end
-	local snap = Snapshot()
+	local snap, own = Snapshot()
+	for questID, old in pairs(ownQuests) do
+		for j, gain in pairs(Gains(old, own[questID])) do
+			local key = questID .. ":" .. j
+			if alerted[key] then alerted[key] = alerted[key] > gain and alerted[key] - gain or nil end
+		end
+	end
+	ownQuests = own
+
 	local entries = {}
 	for id, state in pairs(snap) do
 		if needFull or lastSent[id] ~= state then entries[#entries + 1] = id .. "=" .. state end
@@ -155,34 +262,19 @@ local function StartSync()
 	AskPartner()
 end
 
---------------------------------------------------------------------------------
--- Partner's quest log
---------------------------------------------------------------------------------
-
-local partnerQuests = {} -- [questID] = "C" or { {done, required}, ... }
-local synced = false     -- a full quest log was received from the partner
-
-local function Parse(state)
-	if state == "C" then return "C" end
-	local list = {}
-	for done, required in state:gmatch("(%d+)/(%d+)") do
-		list[#list + 1] = { tonumber(done), tonumber(required) }
-	end
-	return list
-end
-
-local function Apply(payload)
+-- Applies "id=state;..." entries; with trackLoot, partner item loots start the reminder
+local function Apply(payload, trackLoot)
 	for entry in payload:gmatch("[^;]+") do
 		local id, state = entry:match("^(%d+)=(.*)$")
 		id = tonumber(id)
-		if id then partnerQuests[id] = state ~= "X" and Parse(state) or nil end
+		if id then
+			local old, new = partnerQuests[id], state ~= "X" and Parse(state) or nil
+			if trackLoot then
+				for j in pairs(Gains(old, new)) do PartnerLoot(id, j, old[j][1]) end
+			end
+			partnerQuests[id] = new
+		end
 	end
-end
-
-local function PartnerName()
-	local unit = PartnerUnit()
-	local name = unit and Val(UnitName(unit)) or DB().partner
-	return name and name:match("^[^%s%-]+") or "Partenaire"
 end
 
 --------------------------------------------------------------------------------
@@ -214,7 +306,7 @@ end
 
 -- Returns done (true / false / nil = unknown, never blocks) and the text shown after the objective
 local function PartnerObjective(element)
-	local name = PartnerName()
+	local name = PartnerLabel()
 	local q = PartnerQuest(element.questId)
 	if q == nil then
 		return nil, (" %s[%s : pas la quete]|r"):format(C_MISSING, name)
@@ -312,8 +404,9 @@ end
 
 local function ResetPartner()
 	wipe(partnerQuests)
+	wipe(alerted)
 	synced = false
-	lastSent = {}
+	lastSent, ownQuests = {}, {}
 	RefreshRXP()
 end
 
@@ -352,20 +445,25 @@ ev:SetScript("OnEvent", function(_, event, ...)
 
 	elseif event == "CHAT_MSG_ADDON" then
 		local prefix, msg, _, sender = ...
-		if prefix ~= PREFIX or type(msg) ~= "string" or msg:sub(1, 2) ~= "RX" or not IsPartnerName(sender) then return end
-		local kind, payload = msg:match("^(RX%u):?(.*)$")
+		if prefix ~= PREFIX then return end
+		msg = FromPartner(msg, sender)
+		if not msg then return end
+		local kind, payload = msg:match("^(%u%u%u?):?(.*)$")
 		if kind == "RXA" then
 			needFull = true
 			ScheduleFlush(0.2)
 		elseif kind == "RXF" then
 			wipe(partnerQuests)
 			synced = true
-			Apply(payload)
+			Apply(payload, false)
 			RefreshRXP()
 		elseif kind == "RXQ" then
 			if not synced then AskPartner(); return end
-			Apply(payload)
+			Apply(payload, true)
 			RefreshRXP()
+		elseif kind == "LM" and DB().lootAlert then
+			Alert("loot", ("%s n'a pas loot : %s"):format(PartnerLabel(), payload), ns.SOUND_NOTICE, 3)
+			Print(("|cffffd040%s n'a pas loot|r : %s"):format(PartnerLabel(), payload))
 		end
 	end
 end)
@@ -389,19 +487,23 @@ function ns.RXPCommand(arg)
 		StartSync()
 	end
 
-	local count = 0
-	for _ in pairs(partnerQuests) do count = count + 1 end
-	local state
-	if not HookRXP() then
-		state = C_MISSING .. "RestedXP non detecte sur ce perso.|r"
-	elseif not PartnerUnit() then
-		state = "Partenaire absent du groupe."
-	elseif synced then
-		state = ("%d quetes du partenaire recues."):format(count)
-	else
-		state = "En attente du partenaire (DuoBox a jour sur les 2 persos ?)."
-	end
 	Print(("RestedXP : objectifs du partenaire %s, attente du partenaire %s. %s")
-		:format(OnOffText(db.rxp), OnOffText(db.rxpHold), state))
+		:format(OnOffText(db.rxp), OnOffText(db.rxpHold), ns.RXPState()))
 	RefreshRXP()
 end
+
+-- Sync state, shown by /duo rxp and the options panel
+function ns.RXPState()
+	local count = 0
+	for _ in pairs(partnerQuests) do count = count + 1 end
+	if not HookRXP() then
+		return C_MISSING .. "RestedXP non detecte sur ce perso.|r"
+	elseif not PartnerUnit() then
+		return "Partenaire absent du groupe."
+	elseif synced then
+		return ("%d quetes du partenaire recues."):format(count)
+	end
+	return "En attente du partenaire (DuoBox a jour sur les 2 persos ?)."
+end
+
+ns.RefreshRXP = RefreshRXP

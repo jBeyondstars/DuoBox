@@ -29,6 +29,8 @@ local defaults = {
 	autoRez     = true,
 	autoNpc     = true,   -- D-Talk macro: accept / turn in the NPC's quests
 	turnin      = true,   -- alert when a quest turned in by the partner is still in your log
+	acceptAlert = true,   -- alert when the priest has not taken a quest accepted by the hunter
+	lootAlert   = true,   -- alert when a quest item looted by the partner was not looted here (PartnerQuests.lua)
 	frame       = true,
 	bar         = true,   -- Follow / Target / Trade button bar
 	barScale    = 1,      -- bar scale (/duo scale)
@@ -37,8 +39,10 @@ local defaults = {
 	facing      = true,   -- priest facing indicator
 	facingInvert = false, -- swap left/right if the direction is wrong
 	facingDist  = 25,     -- estimated hunter -> target distance (yards)
-	rxp         = true,   -- RestedXP: show the partner's quest objectives (RestedXP.lua)
+	rxp         = true,   -- RestedXP: show the partner's quest objectives (PartnerQuests.lua)
 	rxpHold     = true,   -- RestedXP: an objective is done only once the partner has it too
+	minimap     = true,   -- minimap button that opens the options panel (Options.lua)
+	minimapAngle = 200,   -- its position around the minimap (degrees)
 }
 
 local DB
@@ -129,10 +133,29 @@ local function Clear(key) lastAlert[key] = nil end
 local partnerFollowing = nil -- nil = unknown, true/false otherwise
 local selfFollowing = false
 
+-- Every message starts with this client's tag: the game also delivers party
+-- addon messages to their sender, and both characters may share a first name.
+local function SelfTag()
+	if not ns.tag then
+		local guid = Val(UnitGUID("player"))
+		ns.tag = (guid and guid:match("%-(%x+)$") or ("%06x"):format(math.random(0, 0xffffff))):sub(-8)
+	end
+	return ns.tag
+end
+
 local function SendComm(msg)
 	if not IsInGroup() then return end
 	local send = (C_ChatInfo and C_ChatInfo.SendAddonMessage) or SendAddonMessage
-	if send then return send(PREFIX, msg, "PARTY") end
+	if send then return send(PREFIX, "~" .. SelfTag() .. "~" .. msg, "PARTY") end
+end
+
+-- Message without its tag when it comes from the partner, nil otherwise (own echo, other players)
+local function FromPartner(msg, sender)
+	if type(msg) ~= "string" or not IsPartnerName(sender) then return nil end
+	local tag, body = msg:match("^~(%x+)~(.*)$")
+	if not tag then return msg end -- partner on an older DuoBox (no tag)
+	if tag == SelfTag() then return nil end
+	return body
 end
 
 --------------------------------------------------------------------------------
@@ -926,6 +949,48 @@ local function HandlePartnerMissed(payload)
 end
 
 --------------------------------------------------------------------------------
+-- Accept reminder: the hunter (dps, the main) announces each quest it accepts
+-- ("QACC:<id>:<title>"). If the priest still does not have it ACCEPT_DELAY
+-- seconds later (not shareable, too far, log full...), both screens are alerted.
+--------------------------------------------------------------------------------
+
+local ACCEPT_DELAY = 10
+local acceptPending = {} -- [questID] = { title, due }, accepted by the hunter (priest side)
+
+local function CheckAccepts()
+	local mine, missed, now = MyQuests(), {}, GetTime()
+	for id, p in pairs(acceptPending) do
+		if now >= p.due - 0.1 then
+			acceptPending[id] = nil
+			if not mine[id] and not QuestCompleted(id) then missed[#missed + 1] = p.title end
+		end
+	end
+	if #missed == 0 or not DB.acceptAlert then return end
+	local list = table.concat(missed, ", ")
+	Alert("accept", "Quete a prendre : " .. list, SOUND_NOTICE, 3)
+	Print(("|cffffd040quete(s) prise(s) par %s mais pas par toi|r : %s (bouton Parler / D-Talk au PNJ)")
+		:format(DB.partner or "le partenaire", list))
+	SendComm("QNOT:" .. list:sub(1, 200))
+end
+
+-- The hunter accepted a quest (QACC), priest side
+local function HandlePartnerAccept(payload)
+	local id, title = payload:match("^(%d+):(.*)$")
+	id = tonumber(id)
+	if not id or Role() ~= "heal" or not DB.acceptAlert then return end
+	if MyQuests()[id] or QuestCompleted(id) then return end
+	acceptPending[id] = { title = title ~= "" and title or ("#" .. id), due = GetTime() + ACCEPT_DELAY }
+	C_Timer.After(ACCEPT_DELAY, CheckAccepts)
+end
+
+-- The priest did not take quests that you accepted (QNOT), hunter side
+local function HandlePartnerNotAccepted(payload)
+	if not DB.acceptAlert then return end
+	Alert("accept", (DB.partner or "Le pretre") .. " n'a pas pris : " .. payload, SOUND_NOTICE, 3)
+	Print(("|cffffd040%s n'a pas pris|r : %s"):format(DB.partner or "le pretre", payload))
+end
+
+--------------------------------------------------------------------------------
 -- NPC quests: for a short time after the D-Talk macro (/duo npc), open, accept
 -- and turn in the quests of the NPC you talk to. Talking to an NPC by hand is
 -- never automated. Rewards with a choice are left to the player.
@@ -1715,12 +1780,14 @@ for key, label in pairs({
 end
 
 --------------------------------------------------------------------------------
--- Shared with the other DuoBox files (RestedXP.lua)
+-- Shared with the other DuoBox files (PartnerQuests.lua)
 --------------------------------------------------------------------------------
 
 ns.Print = Print
+ns.Alert = Alert
+ns.SOUND_NOTICE = SOUND_NOTICE
 ns.SendComm = SendComm
-ns.IsPartnerName = IsPartnerName
+ns.FromPartner = FromPartner
 ns.PartnerUnit = PartnerUnit
 ns.GetDB = function() return DB end
 
@@ -1786,7 +1853,7 @@ f:SetScript("OnEvent", function(self, event, ...)
 		end)
 		C_Timer.NewTicker(0.1, FacingTick)
 		UpdateBar()
-		Print(("charge. Role: |cffffd040%s|r, partenaire: |cffffd040%s|r. /duo pour l'aide.")
+		Print(("charge. Role: |cffffd040%s|r, partenaire: |cffffd040%s|r. /duo : options, /duo help : commandes.")
 			:format(Role(), DB.partner or "non defini"))
 
 	elseif event == "PARTY_INVITE_REQUEST" then
@@ -1835,6 +1902,12 @@ f:SetScript("OnEvent", function(self, event, ...)
 		local a, b = ...
 		local questID = b or a
 		DB.lastQuest = questID
+		if Role() == "dps" then
+			-- the log may not list the new quest yet: read the title a moment later
+			C_Timer.After(0.2, function()
+				SendComm(("QACC:%d:%s"):format(questID, (MyQuests()[questID] or ""):sub(1, 200)))
+			end)
+		end
 		if justReceivedFromPartner then
 			justReceivedFromPartner = false -- avoids share ping-pong
 			return
@@ -1865,12 +1938,16 @@ f:SetScript("OnEvent", function(self, event, ...)
 
 	elseif event == "CHAT_MSG_ADDON" then
 		local prefix, msg, _, sender = ...
-		if prefix ~= PREFIX or not IsPartnerName(sender) then return end
+		if prefix ~= PREFIX then return end
+		msg = FromPartner(msg, sender)
+		if not msg then return end
 		local qcmd, payload = msg:match("^(Q%u+):(.*)$")
 		if qcmd == "QREQ" then HandleQuestRequest(payload); return end
 		if qcmd == "QRES" then HandleQuestResult(payload); return end
 		if qcmd == "QTIN" then HandlePartnerTurnin(payload); return end
 		if qcmd == "QMIS" then HandlePartnerMissed(payload); return end
+		if qcmd == "QACC" then HandlePartnerAccept(payload); return end
+		if qcmd == "QNOT" then HandlePartnerNotAccepted(payload); return end
 		local fcmd, fval = msg:match("^(%u%u):(.*)$")
 		if fcmd == "HF" then
 			hunterFacing, hunterFacingTime = (tonumber(fval) or 0) / 1000, GetTime()
@@ -1947,63 +2024,83 @@ f:SetScript("OnEvent", function(self, event, ...)
 end)
 
 --------------------------------------------------------------------------------
+-- Settings: shared by the /duo commands and the options panel (Options.lua)
+--------------------------------------------------------------------------------
+
+-- Stores a setting and applies its side effects, without chat output
+local function Set(key, value)
+	DB[key] = value
+	if key == "frame" then
+		Check()
+	elseif key == "bar" or key == "barScale" or key == "partner" then
+		UpdateBar()
+		if key == "bar" and InCombatLockdown() then Print("sera applique a la sortie du combat.") end
+	elseif key == "facing" then
+		if not value then facingFrame:Hide() end
+	elseif key == "combatMonitor" then
+		UpdateCombatSignal()
+	elseif key == "rxp" or key == "rxpHold" then
+		if ns.RefreshRXP then ns.RefreshRXP() end
+	elseif key == "minimap" or key == "minimapAngle" then
+		if ns.UpdateMinimapButton then ns.UpdateMinimapButton() end
+	end
+end
+
+ns.Set = Set
+ns.Role = Role
+ns.FEATURES = FEATURES
+ns.IsMoveMode = function() return moveMode end
+
+--------------------------------------------------------------------------------
 -- /duo commands
 --------------------------------------------------------------------------------
 
 local function OnOff(key, arg)
-	if arg == "on" then DB[key] = true elseif arg == "off" then DB[key] = false else DB[key] = not DB[key] end
+	if arg == "on" then Set(key, true) elseif arg == "off" then Set(key, false) else Set(key, not DB[key]) end
 	Print(("%s = %s"):format(key, DB[key] and "|cff40ff40on|r" or "|cffff4040off|r"))
 end
 
-local toggles = { sound = "sound", flash = "flash", invite = "autoInvite", quest = "autoQuest", share = "autoShare", rez = "autoRez", frame = "frame", bar = "bar", castbar = "castbar", autonpc = "autoNpc", turnin = "turnin" }
+local toggles = { sound = "sound", flash = "flash", invite = "autoInvite", quest = "autoQuest", share = "autoShare", rez = "autoRez", frame = "frame", bar = "bar", castbar = "castbar", autonpc = "autoNpc", turnin = "turnin", accept = "acceptAlert", loot = "lootAlert", minimap = "minimap" }
 
-SLASH_DUOBOX1 = "/duo"
-SlashCmdList.DUOBOX = function(input)
+local function Command(input)
 	local cmd, arg = (input or ""):match("^%s*(%S*)%s*(.-)%s*$")
 	cmd = cmd:lower()
 
-	if cmd == "partner" and arg ~= "" then
-		DB.partner = arg:match("^[^%-]+")
+	if cmd == "" or cmd == "config" or cmd == "options" then
+		ns.ToggleOptions()
+	elseif cmd == "partner" and arg ~= "" then
+		Set("partner", arg:match("^[^%-]+"))
 		Print("partenaire = |cffffd040" .. DB.partner .. "|r")
-		UpdateBar()
-	elseif cmd == "role" and (arg == "heal" or arg == "dps") then
-		DB.role = arg
-		Print("role = " .. arg)
+	elseif cmd == "role" and (arg == "heal" or arg == "dps" or arg == "auto") then
+		Set("role", arg ~= "auto" and arg or nil)
+		Print("role = " .. Role() .. (DB.role and "" or " (auto)"))
 	elseif cmd == "combatlog" then
 		if not FEATURES.combatMonitor then
 			Print("suivi du combat desactive par le feature flag combatMonitor.")
 			return
 		end
 		OnOff("combatMonitor", arg:lower())
-		UpdateCombatSignal()
 	elseif (cmd == "hp" or cmd == "pet" or cmd == "mana") and tonumber(arg) then
 		local key = cmd == "hp" and "hpPartner" or cmd == "pet" and "hpPet" or "manaPartner"
-		DB[key] = tonumber(arg)
+		Set(key, tonumber(arg))
 		Print(("%s = %d%%"):format(key, DB[key]))
 	elseif cmd == "scale" and tonumber(arg) then
-		DB.barScale = math.max(0.5, math.min(2, tonumber(arg)))
-		UpdateBar()
+		Set("barScale", math.max(0.5, math.min(2, tonumber(arg))))
 		Print(("echelle de la barre = %.2f%s"):format(DB.barScale, InCombatLockdown() and " (appliquee a la sortie du combat)" or ""))
 	elseif toggles[cmd] then
 		OnOff(toggles[cmd], arg:lower())
-		if cmd == "frame" then Check() end
-		if cmd == "bar" then
-			UpdateBar()
-			if InCombatLockdown() then Print("sera applique a la sortie du combat.") end
-		end
 	elseif cmd == "facing" then
 		local sub, val = arg:lower():match("^(%S*)%s*(.-)$")
 		if sub == "debug" then
 			FacingDebug()
 		elseif sub == "invert" then
-			DB.facingInvert = not DB.facingInvert
+			Set("facingInvert", not DB.facingInvert)
 			Print("orientation : gauche/droite " .. (DB.facingInvert and "|cffffd040inverses|r" or "normaux"))
 		elseif sub == "dist" and tonumber(val) then
-			DB.facingDist = tonumber(val)
+			Set("facingDist", tonumber(val))
 			Print(("orientation : distance estimee = %d m"):format(DB.facingDist))
 		else
 			OnOff("facing", sub)
-			if not DB.facing then facingFrame:Hide() end
 		end
 	elseif cmd == "rxp" then
 		ns.RXPCommand(arg)
@@ -2031,8 +2128,9 @@ SlashCmdList.DUOBOX = function(input)
 				tostring(DB.sound), tostring(DB.flash), tostring(DB.autoInvite), tostring(DB.autoQuest), tostring(DB.autoShare), tostring(DB.autoRez)))
 	else
 		Print("commandes :")
+		Print("  /duo                 - ouvre le panneau d'options (aussi via le bouton de la minimap)")
 		Print("  /duo partner <Nom>   - nom du perso partenaire (a faire sur les 2 persos)")
-		Print("  /duo role heal|dps   - force le role (auto : pretre = heal)")
+		Print("  /duo role heal|dps|auto - force le role (auto : pretre = heal)")
 		Print("  /duo macros          - cree/maj les macros de ta classe")
 		Print("  /duo cvars           - son + FPS en arriere-plan, auto-loot")
 		Print("  /duo test            - teste l'alerte")
@@ -2044,7 +2142,15 @@ SlashCmdList.DUOBOX = function(input)
 		Print("  /duo move            - deplacer / redimensionner la barre de cast et l'orientation")
 		Print("  /duo facing [on|off|invert|dist <m>] - indicateur d'orientation du pretre")
 		Print("  /duo rxp [on|off|hold [on|off]|sync] - objectifs du partenaire dans RestedXP")
-		Print("  /duo sound|flash|invite|quest|share|rez|frame|castbar|autonpc|turnin [on|off]")
+		Print("  /duo sound|flash|invite|quest|share|rez|frame|castbar|autonpc|turnin|accept|loot|minimap [on|off]")
 		Print("  /duo status")
+		Print("  /duo help            - cette aide")
 	end
 end
+
+SLASH_DUOBOX1 = "/duo"
+SlashCmdList.DUOBOX = function(input)
+	Command(input)
+	if ns.RefreshOptions then ns.RefreshOptions() end -- keeps the open panel in sync
+end
+ns.Command = SlashCmdList.DUOBOX
