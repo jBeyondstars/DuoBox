@@ -3,8 +3,8 @@
 -- partner (addon messages). Used for:
 --   * RestedXP: each quest objective of the guide shows the partner's count,
 --     and the step waits until the partner has finished it too (/duo rxp).
---   * Quest loot reminder: when the partner loots a quest item that you still
---     need and you do not loot yours within 10 s, both screens get an alert.
+--   * Quest loot reminder: when the partner loots a single quest item that you
+--     still need and you do not loot yours within 10 s, both screens get an alert.
 -- The partner only needs DuoBox: RestedXP is used on the client that shows it.
 --------------------------------------------------------------------------------
 
@@ -136,7 +136,8 @@ end
 -- Quest loot reminder. Quest items drop for each character on the quest, so
 -- LOOT_WINDOW seconds after the partner loots one, your count of that item
 -- should have caught up with theirs. A gap that existed before their loot
--- does not count, and a gap is only reported once.
+-- does not count, and a gap is only reported once. Only objectives that need
+-- one item: "0/8" objectives drift apart all the time and would spam.
 --------------------------------------------------------------------------------
 
 local alerted = {} -- ["questID:obj"] = gap already reported
@@ -146,11 +147,11 @@ local function ItemName(text)
 	return name ~= "" and name or (text or "?")
 end
 
--- Own item objective still in progress: done, required, text (nil otherwise)
+-- Own single-item objective still to loot: done, required, text (nil otherwise)
 local function OwnItem(questID, j)
 	local own = ownQuests[questID]
 	local o = type(own) == "table" and own[j]
-	if o and o[3] == "item" and o[1] < o[2] then return o[1], o[2], o[4] end
+	if o and o[3] == "item" and o[2] == 1 and o[1] < o[2] then return o[1], o[2], o[4] end
 end
 
 local function PartnerDone(questID, j)

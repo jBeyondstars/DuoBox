@@ -18,6 +18,7 @@ local FEATURES = {
 local defaults = {
 	partner     = nil,    -- partner character name (without realm)
 	role        = nil,    -- "heal" or "dps" (auto: PRIEST = heal)
+	leader      = nil,    -- role that leads (the "main", the other follows): "heal" or "dps" (auto: dps)
 	hpPartner   = 50,     -- partner health % that triggers the alert
 	hpPet       = 35,     -- partner pet health % (healer side)
 	manaPartner = 20,     -- partner mana % (dps side)
@@ -86,6 +87,16 @@ local function Role()
 	if DB.role then return DB.role end
 	local _, class = UnitClass("player")
 	return class == "PRIEST" and "heal" or "dps"
+end
+
+-- The leader is played as the "main", the other character follows it.
+-- Stored as a role so the same setting works on both clients (/duo lead).
+local function LeaderRole()
+	return DB.leader or "dps"
+end
+
+local function IsLeader()
+	return Role() == LeaderRole()
 end
 
 -- Returns the partner unit token ("party1".."party4") and its index.
@@ -238,7 +249,7 @@ local function UpdateStatus(unit)
 	local hp = Pct(UnitHealth(unit), UnitHealthMax(unit))
 	local mp = Pct(UnitPower(unit, 0), UnitPowerMax(unit, 0))
 	local fol
-	if Role() == "heal" then
+	if not IsLeader() then
 		fol = selfFollowing and "|cff40ff40OUI|r" or "|cffff4040NON|r"
 	else
 		fol = partnerFollowing == nil and "|cff888888?|r" or partnerFollowing and "|cff40ff40OUI|r" or "|cffff4040NON|r"
@@ -472,10 +483,10 @@ local function FacingTickPriest()
 	end
 end
 
--- Hunter side: send its facing during combat
+-- Hunter side: send its facing during combat (only when the priest follows it)
 local function FacingTickHunter()
 	if not moveMode and GetTime() - lastFCRecv > 3 then facingFrame:Hide() end
-	if not DB.facing or not PartnerUnit() then return end
+	if not DB.facing or not PartnerUnit() or not IsLeader() then return end
 	if not (UnitAffectingCombat("player") or (UnitExists("target") and UnitCanAttack("player", "target"))) then return end
 	local okF, f = pcall(GetPlayerFacing or function() end)
 	f = okF and Val(f) or nil
@@ -488,11 +499,11 @@ local function FacingTickHunter()
 end
 
 local function FacingTick()
-	if Role() == "heal" then FacingTickPriest() else FacingTickHunter() end
+	if Role() ~= "heal" then FacingTickHunter() elseif not IsLeader() then FacingTickPriest() end
 end
 
 --------------------------------------------------------------------------------
--- Priest cast bar on the hunter's screen
+-- Cast bar of the follower (the priest by default) on the leader's screen
 --   CS:<spellID>:<duration ms>:<channel 0/1>:<target>   cast start
 --   CI:<spellID>:<target>                               instant spell cast
 --   CE:<ok|fail|int>                                    cast end
@@ -586,10 +597,16 @@ cast:SetScript("OnSizeChanged", function(self, w, h)
 end)
 grip:Hide()
 
+-- Partner's class name ("Pretre", "Chasseur"...) shown on the cast bar
+local function CasterName()
+	local unit = PartnerUnit()
+	return unit and Val(UnitClass(unit)) or "Partenaire"
+end
+
 local function CastLabel(spellID, target)
 	local name, icon = SpellInfoById(spellID)
 	cast.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
-	local label = "Pretre : " .. (name or "?")
+	local label = CasterName() .. " : " .. (name or "?")
 	if target and target ~= "" then label = label .. "  >  " .. target end
 	return label
 end
@@ -622,11 +639,11 @@ local function OnCastMessage(kind, payload)
 		if payload == "ok" then
 			CastHold(0.2, 1, 0.2, nil, 0.6)
 		else
-			CastHold(1, 0.2, 0.2, "Pretre : " .. (payload == "int" and "INTERROMPU" or "ECHEC"), 1.2)
+			CastHold(1, 0.2, 0.2, CasterName() .. " : " .. (payload == "int" and "INTERROMPU" or "ECHEC"), 1.2)
 		end
 	elseif kind == "ER" then
 		cast.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-		CastHold(1, 0.2, 0.2, "Pretre : " .. payload, 1.8)
+		CastHold(1, 0.2, 0.2, CasterName() .. " : " .. payload, 1.8)
 	end
 end
 
@@ -655,7 +672,7 @@ local function ToggleMoveMode()
 	end
 end
 
--- Priest side: track its own casts
+-- Follower side: track its own casts
 local IGNORED_SPELLS = { [5019] = true, [75] = true, [6603] = true } -- Shoot (wand), Auto Shot, Attack
 local castTarget, casting = "", false
 
@@ -665,7 +682,7 @@ for _, e in ipairs({ "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_START", "UNIT_SPELLC
 	castEvents:RegisterUnitEvent(e, "player")
 end
 castEvents:SetScript("OnEvent", function(self, event, unit, a2, a3, a4)
-	if not DB or not DB.castbar or Role() ~= "heal" or not PartnerUnit() then return end
+	if not DB or not DB.castbar or IsLeader() or not PartnerUnit() then return end
 
 	if event == "UNIT_SPELLCAST_SENT" then
 		-- (unit, target, castGUID, spellID)
@@ -705,7 +722,7 @@ castEvents:SetScript("OnEvent", function(self, event, unit, a2, a3, a4)
 	end
 end)
 
--- Priest spell errors relayed to the hunter (range, line of sight, mana...)
+-- Follower spell errors relayed to the leader (range, line of sight, mana...)
 local RELAYED_ERRORS = {}
 for _, g in ipairs({ "SPELL_FAILED_OUT_OF_RANGE", "ERR_OUT_OF_RANGE", "SPELL_FAILED_LINE_OF_SIGHT",
 		"ERR_OUT_OF_MANA", "SPELL_FAILED_NO_POWER", "SPELL_FAILED_MOVING", "SPELL_FAILED_NOT_READY",
@@ -949,13 +966,13 @@ local function HandlePartnerMissed(payload)
 end
 
 --------------------------------------------------------------------------------
--- Accept reminder: the hunter (dps, the main) announces each quest it accepts
--- ("QACC:<id>:<title>"). If the priest still does not have it ACCEPT_DELAY
+-- Accept reminder: the leader (the main) announces each quest it accepts
+-- ("QACC:<id>:<title>"). If the follower still does not have it ACCEPT_DELAY
 -- seconds later (not shareable, too far, log full...), both screens are alerted.
 --------------------------------------------------------------------------------
 
 local ACCEPT_DELAY = 10
-local acceptPending = {} -- [questID] = { title, due }, accepted by the hunter (priest side)
+local acceptPending = {} -- [questID] = { title, due }, accepted by the leader (follower side)
 
 local function CheckAccepts()
 	local mine, missed, now = MyQuests(), {}, GetTime()
@@ -973,21 +990,21 @@ local function CheckAccepts()
 	SendComm("QNOT:" .. list:sub(1, 200))
 end
 
--- The hunter accepted a quest (QACC), priest side
+-- The leader accepted a quest (QACC), follower side
 local function HandlePartnerAccept(payload)
 	local id, title = payload:match("^(%d+):(.*)$")
 	id = tonumber(id)
-	if not id or Role() ~= "heal" or not DB.acceptAlert then return end
+	if not id or IsLeader() or not DB.acceptAlert then return end
 	if MyQuests()[id] or QuestCompleted(id) then return end
 	acceptPending[id] = { title = title ~= "" and title or ("#" .. id), due = GetTime() + ACCEPT_DELAY }
 	C_Timer.After(ACCEPT_DELAY, CheckAccepts)
 end
 
--- The priest did not take quests that you accepted (QNOT), hunter side
+-- The follower did not take quests that you accepted (QNOT), leader side
 local function HandlePartnerNotAccepted(payload)
 	if not DB.acceptAlert then return end
-	Alert("accept", (DB.partner or "Le pretre") .. " n'a pas pris : " .. payload, SOUND_NOTICE, 3)
-	Print(("|cffffd040%s n'a pas pris|r : %s"):format(DB.partner or "le pretre", payload))
+	Alert("accept", (DB.partner or "Le partenaire") .. " n'a pas pris : " .. payload, SOUND_NOTICE, 3)
+	Print(("|cffffd040%s n'a pas pris|r : %s"):format(DB.partner or "le partenaire", payload))
 end
 
 --------------------------------------------------------------------------------
@@ -1083,7 +1100,7 @@ local function MacroList()
 			{ "D-Smite",   ("#showtooltip Smite\n/assist %s\n/cast [harm,nodead] Smite"):format(T) },
 			{ "D-SmiteW",  ("#showtooltip Smite\n/assist %s\n%s/cast [harm,nodead] Smite"):format(T, STOP_FOLLOW) },
 			{ "D-SWP",     ("#showtooltip Shadow Word: Pain\n/assist %s\n/cast [harm,nodead] Shadow Word: Pain"):format(T) },
-			{ "D-Wand",    ("#showtooltip Shoot\n/assist %s\n%s/cast [harm,nodead] Shoot"):format(T, STOP_FOLLOW) },
+			{ "D-Wand",    ("#showtooltip Shoot\n/assist %s\n/cast [harm,nodead] Shoot"):format(T) },
 			{ "D-LHeal",   onTarget("Lesser Heal", true) },
 			{ "D-Heal",    onTarget("Heal", true) },
 			{ "D-Flash",   onTarget("Flash Heal", true) },
@@ -1104,6 +1121,14 @@ local function MacroList()
 			{ "D-FD",      "#showtooltip Feign Death\n/petfollow\n/cast Feign Death" },
 			{ "D-Assist",  ("#showtooltip\n/assist %s\n/petattack"):format(T) },
 			{ "D-Talk",    ("#showtooltip\n/assist %s\n/duo npc\n/interact"):format(T) },
+			-- When the hunter follows the priest (/duo lead heal)
+			{ "D-Follow",  ("/follow %s"):format(T) },
+			{ "D-Wait",    "/follow player" },
+			-- Auto Shot does not fire while moving: stop following first
+			{ "D-Shoot",   ("#showtooltip Auto Shot\n/assist %s\n%s/petattack\n/cast [harm,nodead] !Auto Shot"):format(T, STOP_FOLLOW) },
+			{ "D-Serpent", ("#showtooltip Serpent Sting\n/assist %s\n/petattack\n/cast [harm,nodead] Serpent Sting"):format(T) },
+			{ "D-Arcane",  ("#showtooltip Arcane Shot\n/assist %s\n/petattack\n/cast [harm,nodead] Arcane Shot"):format(T) },
+			{ "D-Raptor",  ("#showtooltip Raptor Strike\n/assist %s\n/petattack\n/startattack\n/cast [harm,nodead] Raptor Strike"):format(T) },
 		}
 		if DB.partner then
 			table.insert(list, { "D-Invite", ("/invite %s"):format(DB.partner) })
@@ -1324,11 +1349,51 @@ local DRINKS = {
 	{ 2136, 15 }, { 1205, 15 }, { 2288, 5 }, { 1179, 5 }, { 5350, 1 }, { 159, 1 },
 }
 
+-- Hunter shots (second row when the hunter follows the priest)
+local HUNTER_SPELL = { AutoShot = 75, SerpentSting = 1978, ArcaneShot = 3044, RaptorStrike = 2973 }
+
 -- Virtual mouse buttons sent by the Ctrl/Shift+key override bindings: the target then
 -- comes from "*unit-DuoSelf" / "*unit-DuoPet" and does not depend on the modifier state
 local VBTN_SELF, VBTN_PET = "DuoSelf", "DuoPet"
 local priestSpellButtons = {} -- "spell on partner" buttons (Shift = pet, Ctrl = self)
-local btnHeal, btnRez, btnSmite, btnSmiteWait, btnSWP, btnWand, btnDrink
+local btnHeal, btnRez, btnDrink
+local assistButtons = {} -- "assist the partner + spell" buttons, priest and hunter
+
+-- Assist the partner then cast on their target (macrotext set in UpdateAssistButtons).
+-- opts.stopFollow: stop following first (cast time, Auto Shot), opts.pre: macro lines
+-- before the cast, opts.repeating: "!" so Auto Shot is not toggled off when already on.
+local function AssistButton(key, spellID, opts)
+	opts = opts or {}
+	local name, icon = SpellNameIcon(spellID)
+	local b = MakeButton(key, name or key, icon or "Interface\\Icons\\INV_Misc_QuestionMark", true, 2)
+	b:SetAttribute("type", "macro")
+	b.spellName = name
+	b.stopFollow = opts.stopFollow
+	b.pre = opts.pre or ""
+	b.bang = opts.repeating and "!" or ""
+	b.hint = "Prend la cible du partenaire puis lance le sort" .. (opts.stopFollow and "\nArrete le follow avant l'incantation" or "")
+	b.noDesat = true
+	assistButtons[#assistButtons + 1] = b
+	return b
+end
+
+local function UpdateAssistButtons(unit)
+	for _, b in ipairs(assistButtons) do
+		if b.spellName then
+			b:SetAttribute("macrotext", ("/assist %s\n%s%s/cast [harm,nodead] %s%s")
+				:format(unit, b.stopFollow and STOP_FOLLOW or "", b.pre, b.bang, b.spellName))
+		end
+	end
+end
+
+-- Stop following (following yourself)
+local function WaitButton()
+	local b = MakeButton("Wait", "Wait (arreter le follow)", "Interface\\Icons\\Spell_Nature_Sleep", true, 2)
+	b:SetAttribute("type", "macro")
+	b:SetAttribute("macrotext", "/follow player")
+	b.noDesat = true
+	return b
+end
 
 local function ItemCount(id)
 	if C_Item and C_Item.GetItemCount then return C_Item.GetItemCount(id) end
@@ -1424,28 +1489,12 @@ BuildPriestSpellButtons = function()
 	btnRez.spellName = rezName
 	btnRez.hint = "Arrete le follow avant l'incantation"
 
-	-- Assist the partner then attack their target
-	local function assistSpell(key, spellID, stopFollow)
-		local name, icon = SpellNameIcon(spellID)
-		local b = MakeButton(key, name or key, icon or "Interface\\Icons\\INV_Misc_QuestionMark", true, 2)
-		b:SetAttribute("type", "macro")
-		b.spellName = name
-		b.stopFollow = stopFollow
-		b.hint = "Prend la cible du partenaire puis lance le sort" .. (stopFollow and "\nArrete le follow avant l'incantation" or "")
-		b.noDesat = true
-		return b
-	end
-	btnSmite = assistSpell("Smite", SPELL.Smite) -- keeps following
-	btnSmiteWait = assistSpell("SmiteWait", SPELL.Smite, true)
-	btnSmiteWait.label = "Chatiment + Wait"
-	btnSWP = assistSpell("SWP", SPELL.SWP) -- instant: keeps following
-	btnWand = assistSpell("Wand", SPELL.Shoot, true)
-	btnWand.label = "Baguette"
+	AssistButton("Smite", SPELL.Smite) -- keeps following
+	AssistButton("SmiteWait", SPELL.Smite, { stopFollow = true }).label = "Chatiment + Wait"
+	AssistButton("SWP", SPELL.SWP) -- instant: keeps following
+	AssistButton("Wand", SPELL.Shoot).label = "Baguette" -- keeps following
 
-	local bWait = MakeButton("Wait", "Wait (arreter le follow)", "Interface\\Icons\\Spell_Nature_Sleep", true, 2)
-	bWait:SetAttribute("type", "macro")
-	bWait:SetAttribute("macrotext", "/follow player")
-	bWait.noDesat = true
+	WaitButton()
 
 	btnDrink = MakeButton("Drink", "Boire", "Interface\\Icons\\INV_Drink_07", true, 2)
 	btnDrink:SetAttribute("type", "item")
@@ -1460,6 +1509,21 @@ BuildPriestSpellButtons = function()
 			tt:AddLine("Aucune boisson adaptee dans les sacs", 1, 0.3, 0.3)
 		end
 	end
+end
+
+-- Hunter shots on the partner's target (hunter only, for when it follows the priest), created at login
+local hunterBuilt = false
+local function BuildHunterButtons()
+	local _, class = UnitClass("player")
+	if class ~= "HUNTER" or hunterBuilt then return end
+	hunterBuilt = true
+	local PET = "/petattack\n"
+	local shoot = AssistButton("Shoot", HUNTER_SPELL.AutoShot, { stopFollow = true, pre = PET, repeating = true })
+	shoot.hint = "Prend la cible du partenaire, arrete le follow (Tir auto ne part pas en mouvement), familier a l'attaque"
+	AssistButton("Serpent", HUNTER_SPELL.SerpentSting, { pre = PET }) -- instant: keeps following
+	AssistButton("Arcane", HUNTER_SPELL.ArcaneShot, { pre = PET })
+	AssistButton("Raptor", HUNTER_SPELL.RaptorStrike, { pre = PET .. "/startattack\n" })
+	WaitButton()
 end
 
 -- Update priest spells / items (out of combat only)
@@ -1479,11 +1543,6 @@ local function UpdatePriestSpells(unit, pet)
 	end
 	if btnRez and btnRez.spellName then
 		btnRez:SetAttribute("macrotext", ("%s/cast [@%s] %s"):format(STOP_FOLLOW, unit, btnRez.spellName))
-	end
-	for _, b in ipairs({ btnSmite, btnSmiteWait, btnSWP, btnWand }) do
-		if b and b.spellName then
-			b:SetAttribute("macrotext", ("/assist %s\n%s/cast [harm,nodead] %s"):format(unit, b.stopFollow and STOP_FOLLOW or "", b.spellName))
-		end
 	end
 	if btnDrink then
 		local id = BestDrink()
@@ -1572,6 +1631,7 @@ local function UpdateBar()
 		btnFort:SetAttribute("*unit-" .. VBTN_PET, "partypet" .. (idx or 1))
 		UpdatePriestSpells(unit, "partypet" .. (idx or 1))
 	end
+	UpdateAssistButtons(unit)
 	bar:SetScale(DB.barScale)
 	bar:SetShown(DB.bar)
 end
@@ -1784,7 +1844,9 @@ for key, label in pairs({
 	Dispel = "Dissipation (pretre)", Rez = "Resurrection (pretre)", Smite = "Chatiment + assist (pretre)",
 	SmiteWait = "Chatiment + assist + stop follow (pretre)",
 	SWP = "Mot de l'ombre : Douleur + assist (pretre)",
-	Wand = "Baguette + assist (pretre)", Wait = "Wait / stop follow (pretre)", Drink = "Boire (pretre)",
+	Wand = "Baguette + assist (pretre)", Wait = "Wait / stop follow", Drink = "Boire (pretre)",
+	Shoot = "Tir auto + assist + stop follow (chasseur)", Serpent = "Morsure de serpent + assist (chasseur)",
+	Arcane = "Tir des arcanes + assist (chasseur)", Raptor = "Attaque du raptor + assist (chasseur)",
 }) do
 	_G["BINDING_NAME_CLICK DuoBoxBtn" .. key .. ":LeftButton"] = label
 end
@@ -1853,6 +1915,7 @@ f:SetScript("OnEvent", function(self, event, ...)
 			RegisterAddonMessagePrefix(PREFIX)
 		end
 		BuildPriestButtons()
+		BuildHunterButtons()
 		BuildConfigButton()
 		ApplyCastLayout()
 		UpdateHotkeys()
@@ -1912,7 +1975,7 @@ f:SetScript("OnEvent", function(self, event, ...)
 		local a, b = ...
 		local questID = b or a
 		DB.lastQuest = questID
-		if Role() == "dps" then
+		if IsLeader() then
 			-- the log may not list the new quest yet: read the title a moment later
 			C_Timer.After(0.2, function()
 				SendComm(("QACC:%d:%s"):format(questID, (MyQuests()[questID] or ""):sub(1, 200)))
@@ -1959,7 +2022,16 @@ f:SetScript("OnEvent", function(self, event, ...)
 		if qcmd == "QACC" then HandlePartnerAccept(payload); return end
 		if qcmd == "QNOT" then HandlePartnerNotAccepted(payload); return end
 		local fcmd, fval = msg:match("^(%u%u):(.*)$")
-		if fcmd == "HF" then
+		if fcmd == "LD" then
+			local value = (fval == "heal" or fval == "dps") and fval or nil
+			if DB.leader ~= value then
+				DB.leader = value
+				Check()
+				Print(("meneur = |cffffd040%s|r (change par %s)"):format(LeaderRole(), DB.partner or "le partenaire"))
+				if ns.RefreshOptions then ns.RefreshOptions() end
+			end
+			return
+		elseif fcmd == "HF" then
 			hunterFacing, hunterFacingTime = (tonumber(fval) or 0) / 1000, GetTime()
 			return
 		elseif fcmd == "FC" then
@@ -1979,7 +2051,7 @@ f:SetScript("OnEvent", function(self, event, ...)
 			return
 		end
 		if msg == "FW" then
-			if DB.facing then Alert("facing", "Pretre mal oriente !", SOUND_NOTICE, 3) end
+			if DB.facing then Alert("facing", (DB.partner or "Partenaire") .. " mal oriente !", SOUND_NOTICE, 3) end
 			return
 		end
 		if msg == "F1" then
@@ -1987,7 +2059,7 @@ f:SetScript("OnEvent", function(self, event, ...)
 			Clear("follow")
 		elseif msg == "F0" then
 			partnerFollowing = false
-			if Role() == "dps" then
+			if IsLeader() then
 				Alert("follow", (DB.partner or "Partenaire") .. " ne te suit plus !", SOUND_NOTICE, 3)
 			end
 		end
@@ -2018,7 +2090,7 @@ f:SetScript("OnEvent", function(self, event, ...)
 		local a, b = ...
 		local msg = type(a) == "string" and a or b
 		msg = Val(msg)
-		if Role() == "heal" and msg and PartnerUnit() then
+		if not IsLeader() and msg and PartnerUnit() then
 			if msg == ERR_BADATTACKFACING or msg == SPELL_FAILED_UNIT_NOT_INFRONT then
 				SendComm("FW")
 			end
@@ -2042,6 +2114,9 @@ local function Set(key, value)
 	DB[key] = value
 	if key == "frame" then
 		Check()
+	elseif key == "leader" then
+		SendComm("LD:" .. (value or "auto")) -- the partner follows the same setting
+		Check()
 	elseif key == "bar" or key == "barScale" or key == "partner" then
 		UpdateBar()
 		if key == "bar" and InCombatLockdown() then Print("sera applique a la sortie du combat.") end
@@ -2058,6 +2133,7 @@ end
 
 ns.Set = Set
 ns.Role = Role
+ns.IsLeader = IsLeader
 ns.FEATURES = FEATURES
 ns.IsMoveMode = function() return moveMode end
 
@@ -2084,6 +2160,19 @@ local function Command(input)
 	elseif cmd == "role" and (arg == "heal" or arg == "dps" or arg == "auto") then
 		Set("role", arg ~= "auto" and arg or nil)
 		Print("role = " .. Role() .. (DB.role and "" or " (auto)"))
+	elseif cmd == "lead" or cmd == "leader" then
+		arg = arg:lower()
+		local value = (arg == "heal" or arg == "priest" or arg == "pretre") and "heal"
+			or (arg == "dps" or arg == "hunter" or arg == "chasseur") and "dps"
+			or arg == "auto" and "auto"
+		if value then
+			Set("leader", value ~= "auto" and value or nil)
+		end
+		Print(("meneur = |cffffd040%s|r%s : %s"):format(LeaderRole(), DB.leader and "" or " (auto)",
+			IsLeader() and "tu menes, le partenaire te suit" or "tu suis le partenaire"))
+		if value and not PartnerUnit() then
+			Print("|cffffd040partenaire hors groupe|r : fais aussi /duo lead " .. arg .. " sur l'autre perso.")
+		end
 	elseif cmd == "combatlog" then
 		if not FEATURES.combatMonitor then
 			Print("suivi du combat desactive par le feature flag combatMonitor.")
@@ -2133,14 +2222,15 @@ local function Command(input)
 		Print("alerte de test envoyee (si la fenetre est en fond, elle doit clignoter/sonner).")
 	elseif cmd == "status" then
 		local unit = PartnerUnit()
-		Print(("role=%s partenaire=%s (unit=%s) hp<%d pet<%d mana<%d | son=%s flash=%s invite=%s quest=%s share=%s rez=%s")
-			:format(Role(), DB.partner or "-", unit or "aucun", DB.hpPartner, DB.hpPet, DB.manaPartner,
+		Print(("role=%s meneur=%s partenaire=%s (unit=%s) hp<%d pet<%d mana<%d | son=%s flash=%s invite=%s quest=%s share=%s rez=%s")
+			:format(Role(), LeaderRole(), DB.partner or "-", unit or "aucun", DB.hpPartner, DB.hpPet, DB.manaPartner,
 				tostring(DB.sound), tostring(DB.flash), tostring(DB.autoInvite), tostring(DB.autoQuest), tostring(DB.autoShare), tostring(DB.autoRez)))
 	else
 		Print("commandes :")
 		Print("  /duo                 - ouvre le panneau d'options (aussi via le bouton de la minimap)")
 		Print("  /duo partner <Nom>   - nom du perso partenaire (a faire sur les 2 persos)")
 		Print("  /duo role heal|dps|auto - force le role (auto : pretre = heal)")
+		Print("  /duo lead heal|dps|auto - qui mene (le main), l'autre suit (auto : le dps mene) ; envoye au partenaire")
 		Print("  /duo macros          - cree/maj les macros de ta classe")
 		Print("  /duo cvars           - son + FPS en arriere-plan, auto-loot")
 		Print("  /duo test            - teste l'alerte")

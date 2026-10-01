@@ -43,6 +43,10 @@
         { "key": "²",        "label": "Interact",           "phrases": [ "interact" ] },
         { "key": "T",        "label": "Talk (NPC quests)",  "phrases": [ "talk" ] },
         { "key": "SHIFT-F6",        "label": "Shadow Word: Pain",  "phrases": [ "dot" ] },
- { "key": "SPACE",        "label": "Jump",  "phrases": [ "jump" ] }
+ { "key": "SPACE",        "label": "Jump",  "phrases": [ "jump" ] },
+        { "key": "ALT-F1",   "label": "Hunter: Auto Shot",     "phrases": [ "shoot" ] },
+        { "key": "ALT-F2",   "label": "Hunter: Serpent Sting", "phrases": [ "serpent" ] },
+        { "key": "ALT-F3",   "label": "Hunter: Arcane Shot",   "phrases": [ "arcane" ] },
+        { "key": "ALT-F5",   "label": "Hunter: Raptor Strike", "phrases": [ "raptor" ] }
     ]
 }

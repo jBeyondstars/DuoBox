@@ -60,20 +60,31 @@ first name (`Duo Box` and `Duo Boxtwo`): each client ignores its own messages.
 The role is automatic (priest = heal, hunter = dps; `/duo role heal|dps|auto` to force it). Thresholds: `/duo hp 50`, `/duo pet 35`, `/duo mana 20`.
 `/duo status` shows the current settings and the detected partner unit (it must be `party1`).
 
+### Leader: which character is the main
+By default the hunter (dps) leads and the priest follows. To play the priest as the main with the hunter following it,
+type `/duo lead heal` (`/duo lead dps` or `auto` to go back), or use "Meneur" in the General tab of the options panel.
+The setting is sent to the partner when it is in the group (otherwise type it on both characters). It decides:
+- who gets the **"stopped following you"** alert and which follow state the status frame shows (the leader watches the follower);
+- the direction of the **"quest not taken"** reminder (the follower must take the leader's quests);
+- the **cast bar** (the follower's spells and errors on the leader's screen, e.g. the hunter's "out of range");
+- the **priest facing indicator**, which only runs while the priest follows.
+
+Health, mana, pet and aggro alerts do not change: they depend on the role (heal / dps).
+
 ### Alerts
 - **On the priest client**: hunter below 50% health, pet below 35%, hunter dead, aggro on the priest.
-- **On the hunter client**: priest below 50% health, priest mana below 20%, aggro on the priest, priest dead,
-  **the priest stopped following you**.
+- **On the hunter client**: priest below 50% health, priest mana below 20%, aggro on the priest, priest dead.
+- **On the leader's client** (the hunter by default): **the partner stopped following you**.
 - **On both clients: quest not turned in.** When one character turns in a quest that the other still has in its log,
   the other gets 15 s to turn it in too (D-Talk / "talk"); after that both screens get an alert with the quest name
   ("(pas terminee)" when it is not complete yet). `/duo turnin off` disables it.
-- **On both clients: quest not taken by the priest.** When the hunter accepts a quest, the priest gets 10 s to have it
+- **On both clients: quest not taken by the follower.** When the leader accepts a quest, the follower gets 10 s to have it
   too (automatic share, or D-Talk / "talk" when the quest cannot be shared); after that both screens get an alert with
   the quest name. `/duo accept off` disables it.
 - **On both clients: quest item not looted.** When one character loots a quest item that the other still needs
   (quest items drop for each character on the quest), the other gets 10 s to loot its copy; after that both screens
-  get an alert with the item name. It compares the item counts of the quest objective, so looting before the partner
-  is fine too. `/duo loot off` disables it.
+  get an alert with the item name. Looting before the partner is fine too. Only objectives that need a single item
+  (`0/1`) are checked: objectives like `0/8` drift apart during farming and are left out. `/duo loot off` disables it.
 - A small movable status frame shows the partner's health, mana and follow state.
 - **Aggro on the priest** is detected from threat, from a mob targeting the priest (enemy nameplates must be shown, `V` key)
   or from damage taken, and triggers a sound alert on both screens.
@@ -85,16 +96,20 @@ Always shown, semi-transparent, opaque on mouse-over. Shift+drag to move it, `/d
 - **Row 1**: **Follow** · **Target** · **Assist** · **Talk** (same as the D-Talk macro) · **Sit** (`/sit`) · **Trade** · **Invite** · **Compare quests** · **Share last quest** · **Key bindings** (gear).
 - **Row 2 (priest only)**: **Fortitude** · **Shield** · **Renew** · **Heal** (Lesser Heal, then Heal once learned) · **Dispel** ·
   **Resurrection** · **Smite**, **Smite + Wait**, **Shadow Word: Pain** and **Wand** (assist the hunter + spell) · **Wait** (stop following) · **Drink** (best drink in your bags for your level).
+- **Row 2 (hunter only)**, for when the hunter follows the priest: **Auto Shot**, **Serpent Sting**, **Arcane Shot**,
+  **Raptor Strike** (assist the priest + pet attacks + shot) · **Wait** (stop following).
+  **Auto Shot** stops following first (it does not fire while moving) and does not toggle it off if already active.
 - Fortitude / Shield / Renew / Heal / Dispel: click = partner, **Shift** = partner's pet, **Ctrl** = yourself.
-- **Heal**, **Resurrection**, **Smite + Wait** and **Wand** stop following before casting (moving would interrupt the cast):
-  follow again afterwards.
+- **Heal**, **Resurrection** and **Smite + Wait** stop following before casting (moving would interrupt the cast):
+  follow again afterwards. **Wand** keeps following (use **Wait** first if the priest must stand still).
   Fortitude gets a golden border when a buff is missing or expires in less than 2 minutes (out of combat only).
 - **Compare quests** shares your quests that the partner is missing and tells you which ones they have in addition
   (then click "Compare" on their window).
 
-### Priest cast bar (hunter screen)
+### Partner cast bar (leader screen)
 Yellow while casting, blue for an instant spell, green on success, red when interrupted / failed.
-It also shows the priest's spell errors (out of range, line of sight, not enough mana, wrong facing…).
+It also shows the follower's spell errors (out of range, line of sight, not enough mana, wrong facing…).
+By default the priest follows, so this is the priest's cast bar on the hunter's screen (see `/duo lead`).
 `/duo castbar off` to hide it.
 
 ### Priest facing indicator (hunter screen)
@@ -152,8 +167,9 @@ so the guide also counts the partner:
 | D-Rez | Resurrection on the hunter | `V` |
 
 Example: `Shift+E` = shield on the pet, `Ctrl+1` = heal yourself.
-Spells with a cast time (D-SmiteW, D-Wand, D-LHeal, D-Heal, D-Flash, D-Rez) stop following first (`/follow player`),
+Spells with a cast time (D-SmiteW, D-LHeal, D-Heal, D-Flash, D-Rez) stop following first (`/follow player`),
 otherwise the follow moves the priest and interrupts the cast. Follow again afterwards (D-Follow / "follow").
+D-Wand keeps following.
 
 ### Hunter
 | Macro | Effect |
@@ -165,6 +181,10 @@ otherwise the follow moves the priest and interrupts the cast. Follow again afte
 | D-FD | recall the pet + Feign Death |
 | D-Invite | invite the priest |
 | D-Talk | target the priest's target (NPC), talk to it, accept / turn in its quests |
+| D-Follow / D-Wait | `/follow` the priest / stop following (when the priest leads) |
+| D-Shoot | assist the priest + stop following + pet attacks + Auto Shot |
+| D-Serpent / D-Arcane | assist the priest + pet attacks + Serpent Sting / Arcane Shot (keeps following) |
+| D-Raptor | assist the priest + pet attacks + melee attack + Raptor Strike |
 
 **D-Talk**: the macro targets the partner's target, arms DuoBox for 20 s (`/duo npc`) and interacts with the NPC (`/interact`).
 While armed, DuoBox opens the NPC's quests, turns in completed ones first, accepts available ones, and takes the reward
@@ -223,6 +243,18 @@ and downloads the English model `vosk-model-small-en-us-0.15` (~40 MB) into `Voi
 | talk | T (D-Talk macro) | dot | Y (Shadow Word: Pain) |
 | buff yourself | Ctrl+F2 | heal yourself | Ctrl+F7 |
 | sit | F6 (Sit button) | smite wait | Shift+F11 (Smite + Wait) |
+
+Hunter commands, for when the hunter follows the priest (`/duo lead heal`). Bind these keys on the hunter with `/duo keys`
+(row 2 of the hunter), and speak while the hunter window is focused. They use Alt+F keys, unused on the priest, so saying
+them on the wrong window does nothing (Alt+F4 is skipped: Windows closes the window). The shared commands (follow, wait,
+assist, talk, interact, sit) work on the hunter too if you bind the same keys there.
+
+| Phrase | Key | Hunter button |
+|---|---|---|
+| shoot | Alt+F1 | Auto Shot (assist + stop following + pet attack) |
+| serpent | Alt+F2 | Serpent Sting |
+| arcane | Alt+F3 | Arcane Shot |
+| raptor | Alt+F5 | Raptor Strike |
 
 Settings in `commands.json`:
 - `commands`: key and phrases (several phrases per command are allowed).

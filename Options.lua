@@ -242,11 +242,23 @@ for i, r in ipairs({ { nil, "Auto (pretre = heal)" }, { "heal", "Heal" }, { "dps
 	roleButtons[i] = cb
 end
 
-Header(general, 0, -126, "Actions")
+Header(general, 0, -120, "Meneur (le main, l'autre le suit)")
+local leaderState = Note(general, 250, -122, 200)
+for i, r in ipairs({ { nil, "Auto (le dps mene)" }, { "heal", "Heal" }, { "dps", "DPS" } }) do
+	local value = r[1]
+	local cb = CheckBox(general, ({ 0, 160, 240 })[i], -136, r[2],
+		(value and ("Le " .. r[2] .. " mene, l'autre le suit.") or "Le dps (chasseur) mene, le heal (pretre) le suit.")
+		.. " Envoye au partenaire s'il est dans le groupe.")
+	cb:SetScript("OnClick", function() ns.Set("leader", value); ns.RefreshOptions() end)
+	cb.Refresh = function(self) self:SetChecked(DB().leader == value) end
+	controls[#controls + 1] = cb
+end
+
+Header(general, 0, -170, "Actions")
 local BW = 222
-Button(general, 0, -146, BW, "Creer / maj les macros", Run("macros"),
+Button(general, 0, -190, BW, "Creer / maj les macros", Run("macros"),
 	"Cree les macros D-xxx de ta classe (onglet perso de /macro). Hors combat.")
-Button(general, COL2 - 6, -146, BW, "Raccourcis clavier", function()
+Button(general, COL2 - 6, -190, BW, "Raccourcis clavier", function()
 	ns.Command("keys")
 	local keys = _G.DuoBoxKeys
 	if keys and keys:IsShown() then
@@ -255,24 +267,24 @@ Button(general, COL2 - 6, -146, BW, "Raccourcis clavier", function()
 		keys:Raise()
 	end
 end, "Associe une touche a chaque bouton de la barre.")
-Button(general, 0, -172, BW, "Tester l'alerte", Run("test"),
+Button(general, 0, -216, BW, "Tester l'alerte", Run("test"),
 	"Joue l'alerte (son + clignotement). Passe sur l'autre fenetre pour verifier qu'elle sonne en fond.")
-Button(general, COL2 - 6, -172, BW, "Appliquer les CVars", Run("cvars"),
+Button(general, COL2 - 6, -216, BW, "Appliquer les CVars", Run("cvars"),
 	"Son en arriere-plan (pour entendre les alertes) et auto-loot.")
-Button(general, 0, -198, BW, "Inviter le partenaire", function() DuoBoxBtnInvite:Click() end,
+Button(general, 0, -242, BW, "Inviter le partenaire", function() DuoBoxBtnInvite:Click() end,
 	"Invite le partenaire dans le groupe.")
-Button(general, COL2 - 6, -198, BW, "Comparer les quetes", function() DuoBoxBtnQuests:Click() end,
+Button(general, COL2 - 6, -242, BW, "Comparer les quetes", function() DuoBoxBtnQuests:Click() end,
 	"Partage tes quetes qui manquent au partenaire.")
-local moveBtn = Button(general, 0, -224, BW, "", Run("move"),
+local moveBtn = Button(general, 0, -268, BW, "", Run("move"),
 	"Affiche la barre de cast et l'orientation pour les deplacer (coin bas-droit : taille). Recliquer pour enregistrer.")
 moveBtn.Refresh = function(self)
 	self:SetText(ns.IsMoveMode() and "|cffffd040Terminer le deplacement|r" or "Deplacer cast / orientation")
 end
 controls[#controls + 1] = moveBtn
-Button(general, COL2 - 6, -224, BW, "Afficher l'etat dans le chat", Run("status"),
+Button(general, COL2 - 6, -268, BW, "Afficher l'etat dans le chat", Run("status"),
 	"Resume des reglages et de l'unite du partenaire detectee.")
 
-Note(general, 0, -262, 450):SetText("|cff999999Toutes ces options existent aussi en commande : /duo help.|r")
+Note(general, 0, -300, 450):SetText("|cff999999Toutes ces options existent aussi en commande : /duo help.|r")
 
 --------------------------------------------------------------------------------
 -- Page 2: Alerts
@@ -287,10 +299,10 @@ Toggle(alerts, 0, -42, "flash", "Clignoter (barre des taches)", "Fait clignoter 
 Header(alerts, 0, -80, "Quetes")
 Toggle(alerts, 0, -98, "turnin", "Quete rendue par le partenaire",
 	"Alerte quand le partenaire rend une quete qui est encore dans ton journal.")
-Toggle(alerts, 0, -122, "acceptAlert", "Quete pas prise par le pretre",
-	"Alerte quand le pretre n'a toujours pas une quete 10 s apres que le chasseur l'a prise.")
+Toggle(alerts, 0, -122, "acceptAlert", "Quete pas prise par le suiveur",
+	"Alerte quand le perso qui suit n'a toujours pas une quete 10 s apres que le meneur l'a prise.")
 Toggle(alerts, 0, -146, "lootAlert", "Objet de quete non ramasse",
-	"Alerte quand le partenaire a ramasse un objet de quete que tu n'as pas.")
+	"Alerte quand le partenaire a ramasse un objet de quete unique (0/1) que tu n'as pas.")
 
 Button(alerts, 0, -188, 200, "Tester l'alerte", Run("test"))
 
@@ -328,7 +340,7 @@ local display = NewPage("Affichage")
 Header(display, 0, 0, "Cadres")
 Toggle(display, 0, -18, "frame", "Cadre de statut du partenaire", "PV, mana et follow du partenaire.")
 Toggle(display, 0, -42, "bar", "Barre de boutons", "Follow / Cibler / Echange... (Maj + glisser pour la deplacer).")
-Toggle(display, 0, -66, "castbar", "Barre de cast du pretre", "Les sorts et erreurs du pretre, affiches chez le chasseur.")
+Toggle(display, 0, -66, "castbar", "Barre de cast du suiveur", "Les sorts et erreurs du perso qui suit, affiches chez le meneur.")
 Toggle(display, 0, -90, "minimap", "Bouton de la minimap", "Clic : ce panneau. Clic droit : raccourcis. Glisser : deplacer.")
 Slider(display, 0, -122, "barScale", "Taille de la barre", 0.5, 2, 0.05, "%.2f")
 if ns.FEATURES.combatMonitor then
@@ -337,7 +349,7 @@ if ns.FEATURES.combatMonitor then
 end
 
 Header(display, COL2, 0, "Orientation du pretre")
-Toggle(display, COL2, -18, "facing", "Indicateur d'orientation", "Indique au chasseur si le pretre fait face a la cible.")
+Toggle(display, COL2, -18, "facing", "Indicateur d'orientation", "Indique au chasseur si le pretre fait face a la cible (quand le pretre suit).")
 Toggle(display, COL2, -42, "facingInvert", "Inverser gauche / droite", "Si la direction indiquee est fausse.")
 Slider(display, COL2, -74, "facingDist", "Distance chasseur - cible", 5, 40, 1, "%d m",
 	"Distance estimee pour calculer l'angle quand le familier n'est pas au contact.")
@@ -378,6 +390,7 @@ local function RefreshLive()
 		partnerState:SetText(("|cffffd040%s n'est pas dans le groupe.|r"):format(db.partner))
 	end
 	roleState:SetText(("Role actuel : |cffffd040%s|r"):format(ns.Role()))
+	leaderState:SetText(ns.IsLeader() and "|cff40ff40Tu menes|r" or "|cffffd040Tu suis le partenaire|r")
 	rxpState:SetText(ns.RXPState and ("Etat : " .. ns.RXPState()) or "")
 end
 

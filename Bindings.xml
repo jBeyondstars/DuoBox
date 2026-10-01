@@ -20,4 +20,8 @@
 	<Binding name="CLICK DuoBoxBtnWand:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnWait:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnDrink:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnShoot:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnSerpent:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnArcane:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnRaptor:LeftButton" category="ADDONS"/>
 </Bindings>
