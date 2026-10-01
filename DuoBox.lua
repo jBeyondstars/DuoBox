@@ -1893,6 +1893,62 @@ for _, e in ipairs({ "SPELLS_CHANGED", "BAG_UPDATE_DELAYED", "PLAYER_LEVEL_UP" }
 	pcall(f.RegisterEvent, f, e)
 end
 
+-- Addon messages from the partner (kept out of OnEvent: Lua 5.1 allows 60 upvalues per function)
+local function OnAddonMessage(prefix, msg, _, sender)
+	if prefix ~= PREFIX then return end
+	msg = FromPartner(msg, sender)
+	if not msg then return end
+	local qcmd, payload = msg:match("^(Q%u+):(.*)$")
+	if qcmd == "QREQ" then HandleQuestRequest(payload); return end
+	if qcmd == "QRES" then HandleQuestResult(payload); return end
+	if qcmd == "QTIN" then HandlePartnerTurnin(payload); return end
+	if qcmd == "QMIS" then HandlePartnerMissed(payload); return end
+	if qcmd == "QACC" then HandlePartnerAccept(payload); return end
+	if qcmd == "QNOT" then HandlePartnerNotAccepted(payload); return end
+	local fcmd, fval = msg:match("^(%u%u):(.*)$")
+	if fcmd == "LD" then
+		local value = (fval == "heal" or fval == "dps") and fval or nil
+		if DB.leader ~= value then
+			DB.leader = value
+			Check()
+			Print(("meneur = |cffffd040%s|r (change par %s)"):format(LeaderRole(), DB.partner or "le partenaire"))
+			if ns.RefreshOptions then ns.RefreshOptions() end
+		end
+		return
+	elseif fcmd == "HF" then
+		hunterFacing, hunterFacingTime = (tonumber(fval) or 0) / 1000, GetTime()
+		return
+	elseif fcmd == "FC" then
+		lastFCRecv, lastFCCode = GetTime(), fval
+		ShowFacing(fval)
+		if fval:sub(1, 1) == "U" and GetTime() - lastAutoDebug > 15 then
+			lastAutoDebug = GetTime()
+			FacingDebug(true)
+		end
+		return
+	elseif fcmd == "CS" or fcmd == "CI" or fcmd == "CE" or fcmd == "ER" then
+		OnCastMessage(fcmd, fval)
+		return
+	end
+	if msg == "AG" then
+		Alert("aggro", "AGGRO sur " .. (DB.partner or "le pretre") .. " !", SOUND_WARN, 3)
+		return
+	end
+	if msg == "FW" then
+		if DB.facing then Alert("facing", (DB.partner or "Partenaire") .. " mal oriente !", SOUND_NOTICE, 3) end
+		return
+	end
+	if msg == "F1" then
+		partnerFollowing = true
+		Clear("follow")
+	elseif msg == "F0" then
+		partnerFollowing = false
+		if IsLeader() then
+			Alert("follow", (DB.partner or "Partenaire") .. " ne te suit plus !", SOUND_NOTICE, 3)
+		end
+	end
+end
+
 f:SetScript("OnEvent", function(self, event, ...)
 	if event == "ADDON_LOADED" then
 		if ... ~= ADDON then return end
@@ -2010,59 +2066,7 @@ f:SetScript("OnEvent", function(self, event, ...)
 		SendComm("F0")
 
 	elseif event == "CHAT_MSG_ADDON" then
-		local prefix, msg, _, sender = ...
-		if prefix ~= PREFIX then return end
-		msg = FromPartner(msg, sender)
-		if not msg then return end
-		local qcmd, payload = msg:match("^(Q%u+):(.*)$")
-		if qcmd == "QREQ" then HandleQuestRequest(payload); return end
-		if qcmd == "QRES" then HandleQuestResult(payload); return end
-		if qcmd == "QTIN" then HandlePartnerTurnin(payload); return end
-		if qcmd == "QMIS" then HandlePartnerMissed(payload); return end
-		if qcmd == "QACC" then HandlePartnerAccept(payload); return end
-		if qcmd == "QNOT" then HandlePartnerNotAccepted(payload); return end
-		local fcmd, fval = msg:match("^(%u%u):(.*)$")
-		if fcmd == "LD" then
-			local value = (fval == "heal" or fval == "dps") and fval or nil
-			if DB.leader ~= value then
-				DB.leader = value
-				Check()
-				Print(("meneur = |cffffd040%s|r (change par %s)"):format(LeaderRole(), DB.partner or "le partenaire"))
-				if ns.RefreshOptions then ns.RefreshOptions() end
-			end
-			return
-		elseif fcmd == "HF" then
-			hunterFacing, hunterFacingTime = (tonumber(fval) or 0) / 1000, GetTime()
-			return
-		elseif fcmd == "FC" then
-			lastFCRecv, lastFCCode = GetTime(), fval
-			ShowFacing(fval)
-			if fval:sub(1, 1) == "U" and GetTime() - lastAutoDebug > 15 then
-				lastAutoDebug = GetTime()
-				FacingDebug(true)
-			end
-			return
-		elseif fcmd == "CS" or fcmd == "CI" or fcmd == "CE" or fcmd == "ER" then
-			OnCastMessage(fcmd, fval)
-			return
-		end
-		if msg == "AG" then
-			Alert("aggro", "AGGRO sur " .. (DB.partner or "le pretre") .. " !", SOUND_WARN, 3)
-			return
-		end
-		if msg == "FW" then
-			if DB.facing then Alert("facing", (DB.partner or "Partenaire") .. " mal oriente !", SOUND_NOTICE, 3) end
-			return
-		end
-		if msg == "F1" then
-			partnerFollowing = true
-			Clear("follow")
-		elseif msg == "F0" then
-			partnerFollowing = false
-			if IsLeader() then
-				Alert("follow", (DB.partner or "Partenaire") .. " ne te suit plus !", SOUND_NOTICE, 3)
-			end
-		end
+		OnAddonMessage(...)
 
 	elseif event == "GROUP_ROSTER_UPDATE" then
 		if not PartnerUnit() then partnerFollowing = nil end
