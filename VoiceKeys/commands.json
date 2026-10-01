@@ -1,6 +1,6 @@
 {
     "language": "en-US",
-    "audioDevice": "1",
+    "audioDevice": "Focusrite",
     "voskModel": "model",
     "voskMinConfidence": 0.6,
     "noiseGate": "auto",

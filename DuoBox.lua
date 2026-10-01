@@ -1324,6 +1324,9 @@ local DRINKS = {
 	{ 2136, 15 }, { 1205, 15 }, { 2288, 5 }, { 1179, 5 }, { 5350, 1 }, { 159, 1 },
 }
 
+-- Virtual mouse buttons sent by the Ctrl/Shift+key override bindings: the target then
+-- comes from "*unit-DuoSelf" / "*unit-DuoPet" and does not depend on the modifier state
+local VBTN_SELF, VBTN_PET = "DuoSelf", "DuoPet"
 local priestSpellButtons = {} -- "spell on partner" buttons (Shift = pet, Ctrl = self)
 local btnHeal, btnRez, btnSmite, btnSmiteWait, btnSWP, btnWand, btnDrink
 
@@ -1370,7 +1373,9 @@ local function BuildPriestButtons()
 	btnFort.modTargets = true
 	btnFort:SetAttribute("type", "spell")
 	btnFort:SetAttribute("spell", name or "Power Word: Fortitude")
-	btnFort:SetAttribute("ctrl-unit", "player")
+	-- "*" suffix required: a click looks up "ctrl-unit1", "ctrl-unit*", then "unit", never "ctrl-unit"
+	btnFort:SetAttribute("ctrl-unit*", "player")
+	btnFort:SetAttribute("*unit-" .. VBTN_SELF, "player") -- Ctrl+key, see ApplyModifierBindings
 	btnFort.hint = "Clic : partenaire - Maj : son familier - Ctrl : toi"
 	btnFort.extra = function(tt)
 		for who in pairs(fortNeed) do tt:AddLine("A rebuff : " .. who, 1, 0.8, 0.2) end
@@ -1396,7 +1401,8 @@ BuildPriestSpellButtons = function()
 		local b = MakeButton(key, name or key, icon or "Interface\\Icons\\INV_Misc_QuestionMark", true, 2)
 		b:SetAttribute("type", "spell")
 		b:SetAttribute("spell", name)
-		b:SetAttribute("ctrl-unit", "player")
+		b:SetAttribute("ctrl-unit*", "player")
+		b:SetAttribute("*unit-" .. VBTN_SELF, "player")
 		b.hint = MOD_HINT
 		b.noDesat = true
 		b.modTargets = true
@@ -1460,12 +1466,15 @@ end
 local function UpdatePriestSpells(unit, pet)
 	for _, b in ipairs(priestSpellButtons) do
 		b:SetAttribute("unit", unit)
-		b:SetAttribute("shift-unit", pet)
+		b:SetAttribute("shift-unit*", pet)
+		b:SetAttribute("*unit-" .. VBTN_PET, pet)
 	end
 	if btnHeal then
 		local id = Known(SPELL.Heal) and SPELL.Heal or SPELL.LesserHeal
 		local name, icon = SpellNameIcon(id)
 		btnHeal:SetAttribute("macrotext", ("%s/cast [mod:shift,@%s][mod:ctrl,@player][@%s] %s"):format(STOP_FOLLOW, pet, unit, name))
+		btnHeal:SetAttribute("*macrotext-" .. VBTN_SELF, ("%s/cast [@player] %s"):format(STOP_FOLLOW, name))
+		btnHeal:SetAttribute("*macrotext-" .. VBTN_PET, ("%s/cast [@%s] %s"):format(STOP_FOLLOW, pet, name))
 		if icon then btnHeal.icon:SetTexture(icon) end
 	end
 	if btnRez and btnRez.spellName then
@@ -1559,7 +1568,8 @@ local function UpdateBar()
 	btnTalk:SetAttribute("macrotext", ("/assist %s\n/duo npc\n/interact"):format(unit))
 	if btnFort then
 		btnFort:SetAttribute("unit", unit)
-		btnFort:SetAttribute("shift-unit", "partypet" .. (idx or 1))
+		btnFort:SetAttribute("shift-unit*", "partypet" .. (idx or 1))
+		btnFort:SetAttribute("*unit-" .. VBTN_PET, "partypet" .. (idx or 1))
 		UpdatePriestSpells(unit, "partypet" .. (idx or 1))
 	end
 	bar:SetScale(DB.barScale)
@@ -1602,7 +1612,7 @@ local function ApplyModifierBindings()
 	modApplied = signature
 	ClearOverrideBindings(modOwner)
 	for key, name in pairs(wanted) do
-		SetOverrideBindingClick(modOwner, false, key, name, "LeftButton")
+		SetOverrideBindingClick(modOwner, false, key, name, key:find("^SHIFT%-") and VBTN_PET or VBTN_SELF)
 	end
 end
 
