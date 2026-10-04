@@ -3,9 +3,10 @@
 ## Notes: Duo-boxing helper: cross-client alerts, priest cast bar and facing hints, partner invite/quest auto-accept, partner objectives in RestedXP, quest loot reminder, key bindings and macros. No key broadcasting.
 ## Author: jBeyondstars
 ## Version: 1.0.0
-## OptionalDeps: RXPGuides
+## OptionalDeps: RXPGuides, GatherLite, TomTom, Questie
 ## SavedVariablesPerCharacter: DuoBoxDB
 
 DuoBox.lua
 PartnerQuests.lua
+PartnerTracking.lua
 Options.lua

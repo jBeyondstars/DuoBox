@@ -3,3 +3,6 @@ VoiceKeys/.venv/
 VoiceKeys/model/
 VoiceKeys/model.zip
 VoiceKeys/__pycache__/
+
+# Lua regression tests run through Python/lupa
+tests/__pycache__/

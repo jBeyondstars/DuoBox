@@ -122,6 +122,37 @@ which way to turn (left / right with the angle) or that the priest is facing cor
 - `/duo facing invert` if left/right are swapped, `/duo facing dist 30` to change the estimated distance,
   `/duo facing off` to hide it, `/duo facing debug` to see which values the client can read.
 
+### Partner gathering detections (experimental)
+
+Enable **Partager les detections (experimental)** in `/duo` → **Affichage** on both characters,
+or use `/duo tracking on`. This is disabled by default. Set each character's partner name and group together.
+The gathering character must have **Find Minerals** or **Find Herbs** active. DuoBox shares only the active
+gathering tracker; it does not activate a spell or give the other character a profession.
+
+WoW does not expose the list or coordinates of native yellow tracking dots. DuoBox checks their **native
+minimap tooltips automatically**, using known GatherLite spawn locations to aim the scan: it briefly moves
+the minimap beneath the stationary cursor. You do not need to hover a resource manually or gather it first.
+Only a tooltip naming a mineral or herb confirms a detection; GatherLite's historical icons are ignored.
+The partner gets a mineral/herb icon on their minimap, with its name on hover.
+
+- **GatherLite with its node database is required on the scanning character**, including its
+  `GetNearbyZoneNodes` API. The receiver only needs HereBeDragons, supplied by GatherLite, TomTom or Questie.
+- The positions are the known spawn locations confirmed by tooltip, so they are approximate. A spawn
+  missing from GatherLite's database cannot be found by this scan.
+- A pass starts every 5 seconds, samples up to 32 locations within 100 yards and lasts at most 1.5 seconds.
+  Larger candidate lists continue across passes. Low background FPS reduces how many locations can be checked.
+- The source minimap briefly disappears or flickers during a pass; native dots and the player arrow may remain
+  visible under the cursor. DuoBox preserves existing textures and restores minimap anchors and mouse settings.
+- Scanning pauses in combat, during camera rotation, while dead, in instances or when targeting a spell.
+  Received markers expire after 15 seconds without confirmation, or when the partner disconnects or disables sharing.
+- This indirect scan needs an **in-game compatibility check on WoW Forever / the beta client**, particularly
+  in the background window. Automated tests cannot confirm how that client resolves native hover tooltips.
+
+`/duo tracking` shows the state and counters; `/duo tracking scan` checks immediately. If a live scan raises a
+Lua error, DuoBox restores the minimap and disables sharing; its diagnostic is shown in the panel and chat.
+To verify in game, stand near a visible yellow resource dot, enable sharing on both clients, scan on the
+gathering character, and check the counters and the other minimap. Repeat after switching to the other window.
+
 ### Moving and resizing
 `/duo move` shows the cast bar and the facing text with sample content so you can drag them;
 the bottom-right corner of the cast bar resizes it. Type `/duo move` again to save.

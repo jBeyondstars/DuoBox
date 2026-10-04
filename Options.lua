@@ -360,6 +360,16 @@ local moveBtn2 = Button(display, COL2, -144, 200, "", Run("move"),
 moveBtn2.Refresh = moveBtn.Refresh
 controls[#controls + 1] = moveBtn2
 
+Header(display, 0, -200, "Detections de metiers sur la minimap")
+Toggle(display, 0, -218, "tracking", "Partager les detections (experimental)",
+	"A activer sur les deux persos. Lit les infobulles des vrais points jaunes puis affiche les reperes chez le partenaire. "
+	.. "GatherLite est requis pour scanner : ses emplacements connus guident le scan. "
+	.. "La minimap est deplacee brievement sous le curseur toutes les 5 s ; elle peut clignoter. "
+	.. "Pause en combat et pendant la rotation de camera. Les reperes expirent apres 15 s sans confirmation.")
+local trackingState = Note(display, 0, -250, 450)
+Button(display, 0, -290, 200, "Scanner maintenant", Run("tracking scan"),
+	"Lance un passage de verification si une detection de minerais ou de plantes est active.")
+
 --------------------------------------------------------------------------------
 -- Page 5: RestedXP
 --------------------------------------------------------------------------------
@@ -392,6 +402,7 @@ local function RefreshLive()
 	roleState:SetText(("Role actuel : |cffffd040%s|r"):format(ns.Role()))
 	leaderState:SetText(ns.IsLeader() and "|cff40ff40Tu menes|r" or "|cffffd040Tu suis le partenaire|r")
 	rxpState:SetText(ns.RXPState and ("Etat : " .. ns.RXPState()) or "")
+	trackingState:SetText(ns.TrackingState and ns.TrackingState() or "")
 end
 
 function ns.RefreshOptions()

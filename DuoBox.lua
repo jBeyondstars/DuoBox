@@ -44,6 +44,7 @@ local defaults = {
 	rxpHold     = true,   -- RestedXP: an objective is done only once the partner has it too
 	minimap     = true,   -- minimap button that opens the options panel (Options.lua)
 	minimapAngle = 200,   -- its position around the minimap (degrees)
+	tracking    = false, -- experimental live gathering tooltip scan / partner minimap pins (PartnerTracking.lua)
 }
 
 local DB
@@ -2143,6 +2144,9 @@ local function Set(key, value)
 	elseif key == "minimap" or key == "minimapAngle" then
 		if ns.UpdateMinimapButton then ns.UpdateMinimapButton() end
 	end
+	if (key == "tracking" or key == "partner") and ns.RefreshTracking then
+		ns.RefreshTracking()
+	end
 end
 
 ns.Set = Set
@@ -2217,6 +2221,8 @@ local function Command(input)
 		end
 	elseif cmd == "rxp" then
 		ns.RXPCommand(arg)
+	elseif cmd == "tracking" then
+		ns.TrackingCommand(arg:lower())
 	elseif cmd == "npc" then
 		-- called by the D-Talk macro / Talk button: arm NPC quest handling for a short time
 		ArmNpc()
@@ -2256,6 +2262,7 @@ local function Command(input)
 		Print("  /duo move            - deplacer / redimensionner la barre de cast et l'orientation")
 		Print("  /duo facing [on|off|invert|dist <m>] - indicateur d'orientation du pretre")
 		Print("  /duo rxp [on|off|hold [on|off]|sync] - objectifs du partenaire dans RestedXP")
+		Print("  /duo tracking [on|off|scan] - detections de metiers du partenaire (experimental, GatherLite)")
 		Print("  /duo sound|flash|invite|quest|share|rez|frame|castbar|autonpc|turnin|accept|loot|minimap [on|off]")
 		Print("  /duo status")
 		Print("  /duo help            - cette aide")
