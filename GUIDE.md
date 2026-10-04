@@ -1,7 +1,8 @@
 # DuoBox: duo-boxing a Dwarf Priest + Night Elf Hunter (WoW Classic / WoW Forever)
 
 DuoBox is a World of Warcraft Classic addon (plus an optional voice tool) for playing two characters at once:
-the hunter is played normally, the priest follows and heals.
+the hunter is played normally, the priest follows and heals. A warrior can take the hunter's place
+(warrior buttons, macros and voice commands below).
 Everything is designed around **"one key press = one action in one game client"**.
 
 > In-game text (chat messages, tooltips, panels) is currently in French.
@@ -61,7 +62,7 @@ The role is automatic (priest = heal, hunter = dps; `/duo role heal|dps|auto` to
 `/duo status` shows the current settings and the detected partner unit (it must be `party1`).
 
 ### Leader: which character is the main
-By default the hunter (dps) leads and the priest follows. To play the priest as the main with the hunter following it,
+By default the hunter or warrior (dps) leads and the priest follows. To play the priest as the main with the hunter following it,
 type `/duo lead heal` (`/duo lead dps` or `auto` to go back), or use "Meneur" in the General tab of the options panel.
 The setting is sent to the partner when it is in the group (otherwise type it on both characters). It decides:
 - who gets the **"stopped following you"** alert and which follow state the status frame shows (the leader watches the follower);
@@ -99,6 +100,15 @@ Always shown, semi-transparent, opaque on mouse-over. Shift+drag to move it, `/d
 - **Row 2 (hunter only)**, for when the hunter follows the priest: **Auto Shot**, **Serpent Sting**, **Arcane Shot**,
   **Raptor Strike** (assist the priest + pet attacks + shot) · **Melee** (assist + pet attacks + melee auto-attack) · **Wait** (stop following).
   **Auto Shot** stops following first (it does not fire while moving) and does not toggle it off if already active.
+- **Row 2 (warrior only)**: **Battle Shout** · **Charge** · **Melee** · **Heroic Strike**, **Rend**, **Sunder Armor**,
+  **Thunder Clap**, **Hamstring**, **Overpower**, **Execute**, **Taunt** · **Wait** (stop following).
+  The warrior usually leads, so its attacks **keep its own enemy target** and only take the partner's when it has none
+  (no target, a friendly or a dead one); the **Assist** button of row 1 forces the partner's target.
+  Every attack stops following (the follow would drag the warrior away from its target) and starts the melee auto-attack;
+  Battle Shout keeps following.
+  **Charge** switches to Battle Stance first when needed (first press, out of combat only) and charges on the next press;
+  **Taunt** does the same with Defensive Stance. **Melee** attacks the target and, with Click-to-Move enabled
+  (Interface options → Mouse), walks to it like the Talk button; it does nothing without an enemy target.
 - Fortitude / Shield / Renew / Heal / Dispel: click = partner, **Shift** = partner's pet, **Ctrl** = yourself.
 - **Heal**, **Resurrection** and **Smite + Wait** stop following before casting (moving would interrupt the cast):
   follow again afterwards. **Wand** keeps following (use **Wait** first if the priest must stand still).
@@ -108,7 +118,8 @@ Always shown, semi-transparent, opaque on mouse-over. Shift+drag to move it, `/d
 
 ### Partner cast bar (leader screen)
 Yellow while casting, blue for an instant spell, green on success, red when interrupted / failed.
-It also shows the follower's spell errors (out of range, line of sight, not enough mana, wrong facing…).
+It also shows the follower's spell errors (out of range, line of sight, not enough mana or rage, wrong facing,
+wrong stance…).
 By default the priest follows, so this is the priest's cast bar on the hunter's screen (see `/duo lead`).
 `/duo castbar off` to hide it.
 
@@ -118,6 +129,8 @@ which way to turn (left / right with the angle) or that the priest is facing cor
 - The game does not expose mob positions, so the target position is estimated from the pet (if it attacks the same target)
   or from a point in front of the hunter. If positions are blocked, it falls back to "face the same direction as the hunter"
   (shown as *approx.*).
+- With a warrior partner the point is taken 3 yd in front of it, since it stands next to its target
+  (the distance setting only applies to the hunter).
 - Does not work in dungeons (positions are blocked there). The priest's "wrong facing" error still triggers an alert.
 - `/duo facing invert` if left/right are swapped, `/duo facing dist 30` to change the estimated distance,
   `/duo facing off` to hide it, `/duo facing debug` to see which values the client can read.
@@ -218,6 +231,25 @@ D-Wand keeps following.
 | D-Raptor | assist the priest + pet attacks + melee attack + Raptor Strike |
 | D-Melee | assist the priest + pet attacks + melee auto-attack |
 
+### Warrior
+Same targeting as the warrior buttons: keep your own enemy target, otherwise take the priest's.
+The attacks stop following and start the melee auto-attack.
+
+| Macro | Effect |
+|---|---|
+| D-Follow / D-Wait | `/follow` the priest / stop following (when the priest leads) |
+| D-Talk | target the priest's target (NPC), talk to it, accept / turn in its quests |
+| D-Charge | Battle Stance if needed (1st press, out of combat), then Charge |
+| D-Melee | melee auto-attack; walks to the target with Click-to-Move |
+| D-Strike / D-Rend / D-Sunder | Heroic Strike / Rend / Sunder Armor |
+| D-Clap / D-Hamstring | Thunder Clap / Hamstring |
+| D-Overpower / D-Execute | Overpower / Execute (only when the game allows them) |
+| D-Taunt | Defensive Stance if needed (1st press), then Taunt |
+| D-Invite | invite the priest |
+
+Battle Shout needs no target: use the button of the bar or the spellbook. WoW binds the stances to Ctrl+F1 / F2 / F3
+by default (stance bar): keep those keys free on the warrior.
+
 **D-Talk**: the macro targets the partner's target, arms DuoBox for 20 s (`/duo npc`) and interacts with the NPC (`/interact`).
 While armed, DuoBox opens the NPC's quests, turns in completed ones first, accepts available ones, and takes the reward
 when there is no choice (with a choice it alerts you and waits). Talking to an NPC by hand is never automated.
@@ -289,6 +321,26 @@ if you bind the same keys there.
 | arcane | F11 | Arcane Shot | Smite |
 | raptor | Ctrl+F11 | Raptor Strike | (unused) |
 | melee | Shift+F12 | Melee auto-attack | (unused) |
+
+Warrior commands: bind these keys on the warrior with `/duo keys` (row 2 of the warrior) and speak while the warrior
+window is focused. Each spell answers to its name. Like the hunter, the main attacks reuse the priest's keys; the others
+use keys unused on the priest. The priest phrases on the same keys work too ("buff" = Battle Shout, "dot" = Rend).
+If "renew" ends up recognized as "rend" on the priest (Shadow Word: Pain instead of Renew), remove the "rend" phrase
+and say "dot".
+
+| Phrase | Key | Warrior button | Same key on the priest |
+|---|---|---|---|
+| shout / battle shout | F2 | Battle Shout | Fortitude |
+| charge | F12 | Charge (Battle Stance first if needed) | Wand |
+| heroic / heroic strike | F11 | Heroic Strike | Smite |
+| rend | Shift+F6 | Rend | Shadow Word: Pain |
+| melee | Shift+F12 | Melee (walks to the target with Click-to-Move) | (unused) |
+| sunder | Ctrl+F11 | Sunder Armor | (unused) |
+| thunder clap | Ctrl+F12 | Thunder Clap | (unused) |
+| hamstring | Shift+F10 | Hamstring | (unused) |
+| overpower | Shift+F8 | Overpower | (unused) |
+| execute | Shift+F3 | Execute | (unused) |
+| taunt | Shift+F1 | Taunt (Defensive Stance first if needed) | (unused) |
 
 Settings in `commands.json`:
 - `commands`: key and phrases (several phrases per command are allowed).

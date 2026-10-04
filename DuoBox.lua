@@ -312,12 +312,15 @@ end
 -- The game does not expose mob positions, so it is estimated with:
 --   1) the pet position if it attacks the same target (melee range),
 --   2) otherwise a point DB.facingDist yards in front of the hunter
---      (the hunter must face their target to shoot).
+--      (the hunter must face their target to shoot), MELEE_DIST yards
+--      for a melee partner (warrior) that stands next to its target.
 -- The priest client computes it (it knows its own facing) and sends
 -- the result to the hunter. Positions are unavailable in dungeons.
 --------------------------------------------------------------------------------
 
 local TWO_PI = 2 * math.pi
+local MELEE_CLASSES = { WARRIOR = true, ROGUE = true }
+local MELEE_DIST = 3
 local hunterFacing, hunterFacingTime = nil, 0   -- received from the hunter (priest side)
 local lastHF, lastHFTime = nil, 0               -- sent (hunter side)
 local lastSentCode, lastSendTime = nil, 0       -- sent (priest side)
@@ -396,8 +399,9 @@ local function ComputeFacing()
 		if not tx and hunterFresh and sameTarget then
 			local hx, hy = WorldPos(unit)
 			if hx then
-				tx = hx + DB.facingDist * math.sin(hunterFacing)
-				ty = hy + DB.facingDist * math.cos(hunterFacing)
+				local dist = MELEE_CLASSES[Val((select(2, UnitClass(unit))))] and MELEE_DIST or DB.facingDist
+				tx = hx + dist * math.sin(hunterFacing)
+				ty = hy + dist * math.cos(hunterFacing)
 			end
 		end
 		if tx then rel = math.atan2(tx - px, ty - py) - facing end
@@ -723,14 +727,32 @@ castEvents:SetScript("OnEvent", function(self, event, unit, a2, a3, a4)
 	end
 end)
 
--- Follower spell errors relayed to the leader (range, line of sight, mana...)
+-- Follower spell errors relayed to the leader (range, line of sight, mana, rage...)
 local RELAYED_ERRORS = {}
 for _, g in ipairs({ "SPELL_FAILED_OUT_OF_RANGE", "ERR_OUT_OF_RANGE", "SPELL_FAILED_LINE_OF_SIGHT",
 		"ERR_OUT_OF_MANA", "SPELL_FAILED_NO_POWER", "SPELL_FAILED_MOVING", "SPELL_FAILED_NOT_READY",
 		"ERR_SPELL_COOLDOWN", "SPELL_FAILED_SPELL_IN_PROGRESS", "SPELL_FAILED_BAD_TARGETS",
 		"SPELL_FAILED_TARGETS_DEAD", "SPELL_FAILED_UNIT_NOT_INFRONT", "ERR_BADATTACKFACING",
-		"SPELL_FAILED_INTERRUPTED", "SPELL_FAILED_SILENCED", "SPELL_FAILED_STUNNED" }) do
+		"SPELL_FAILED_INTERRUPTED", "SPELL_FAILED_SILENCED", "SPELL_FAILED_STUNNED",
+		-- warrior: no rage, Charge too close / in combat, Overpower / Execute not usable yet
+		"ERR_OUT_OF_RAGE", "SPELL_FAILED_TOO_CLOSE", "SPELL_FAILED_AFFECTING_COMBAT", "SPELL_FAILED_CASTER_AURASTATE" }) do
 	if _G[g] then RELAYED_ERRORS[_G[g]] = true end
+end
+-- Formatted errors ("Must be in Battle Stance"): the "%s" part matches anything
+local RELAYED_PATTERNS = {}
+for _, g in ipairs({ "SPELL_FAILED_ONLY_SHAPESHIFT" }) do
+	local before, after = (_G[g] or ""):match("^(.-)%%s(.*)$")
+	if before then
+		RELAYED_PATTERNS[#RELAYED_PATTERNS + 1] = "^" .. before:gsub("%p", "%%%0") .. ".+" .. after:gsub("%p", "%%%0") .. "$"
+	end
+end
+
+local function IsRelayedError(msg)
+	if RELAYED_ERRORS[msg] then return true end
+	for _, p in ipairs(RELAYED_PATTERNS) do
+		if msg:find(p) then return true end
+	end
+	return false
 end
 local lastErrSent = 0
 
@@ -1136,6 +1158,35 @@ local function MacroList()
 			table.insert(list, { "D-Invite", ("/invite %s"):format(DB.partner) })
 		end
 		return list
+	elseif class == "WARRIOR" then
+		-- Keep your own live enemy target, otherwise take the partner's (works leading or following).
+		-- Melee attacks stop following: the follow would drag the warrior away from its target.
+		local ASSIST = ("/assist [noharm][dead] %s\n"):format(T)
+		local function melee(spell, cast)
+			return ("#showtooltip %s\n%s%s/startattack\n/cast %s"):format(spell, ASSIST, STOP_FOLLOW, cast or ("[harm,nodead] " .. spell))
+		end
+		local list = {
+			{ "D-Follow",  ("/follow %s"):format(T) },
+			{ "D-Wait",    "/follow player" },
+			{ "D-Talk",    ("#showtooltip\n/assist %s\n/duo npc\n/interact"):format(T) },
+			-- 1st press switches to Battle Stance if needed (out of combat only), 2nd press charges
+			{ "D-Charge",  ("#showtooltip Charge\n%s%s/cast [nostance:1,nocombat,harm,nodead] Battle Stance; [harm,nodead] Charge"):format(ASSIST, STOP_FOLLOW) },
+			-- /interact walks to the target with Click-to-Move (like D-Talk); nothing without an enemy target
+			{ "D-Melee",   ("#showtooltip Attack\n%s/stopmacro [noharm][dead]\n%s/startattack\n/interact"):format(ASSIST, STOP_FOLLOW) },
+			{ "D-Strike",  melee("Heroic Strike") },
+			{ "D-Rend",    melee("Rend") },
+			{ "D-Sunder",  melee("Sunder Armor") },
+			{ "D-Clap",    melee("Thunder Clap") },
+			{ "D-Hamstring", melee("Hamstring") },
+			{ "D-Overpower", melee("Overpower") },
+			{ "D-Execute", melee("Execute") },
+			-- 1st press switches to Defensive Stance if needed, 2nd press taunts
+			{ "D-Taunt",   melee("Taunt", "[nostance:2,harm,nodead] Defensive Stance; [harm,nodead] Taunt") },
+		}
+		if DB.partner then
+			table.insert(list, { "D-Invite", ("/invite %s"):format(DB.partner) })
+		end
+		return list
 	end
 end
 
@@ -1165,7 +1216,7 @@ end
 --------------------------------------------------------------------------------
 -- Discreet button bar:
 --   Follow / Target / Assist / Trade / Invite / Compare quests / Share last quest
---   + a second row of priest spells (priest only)
+--   + a second row of class spells (priest, hunter, warrior)
 -- (1 click = 1 action on THIS client only)
 -- Shift + drag to move it (out of combat).
 --------------------------------------------------------------------------------
@@ -1360,16 +1411,25 @@ local DRINKS = {
 -- Hunter shots (second row when the hunter follows the priest)
 local HUNTER_SPELL = { AutoShot = 75, SerpentSting = 1978, ArcaneShot = 3044, RaptorStrike = 2973, Attack = 6603 }
 
+-- Warrior attacks (second row)
+local WARRIOR_SPELL = {
+	BattleShout = 6673, Charge = 100, Attack = 6603, HeroicStrike = 78, Rend = 772, Sunder = 7386,
+	ThunderClap = 6343, Hamstring = 1715, Overpower = 7384, Execute = 5308, Taunt = 355,
+	BattleStance = 2457, DefensiveStance = 71,
+}
+
 -- Virtual mouse buttons sent by the Ctrl/Shift+key override bindings: the target then
 -- comes from "*unit-DuoSelf" / "*unit-DuoPet" and does not depend on the modifier state
 local VBTN_SELF, VBTN_PET = "DuoSelf", "DuoPet"
 local priestSpellButtons = {} -- "spell on partner" buttons (Shift = pet, Ctrl = self)
 local btnHeal, btnRez, btnDrink
-local assistButtons = {} -- "assist the partner + spell" buttons, priest and hunter
+local assistButtons = {} -- "assist the partner + spell" buttons, priest, hunter and warrior
 
 -- Assist the partner then cast on their target (macrotext set in UpdateAssistButtons).
 -- opts.stopFollow: stop following first (cast time, Auto Shot), opts.pre: macro lines
--- before the cast, opts.repeating: "!" so Auto Shot is not toggled off when already on.
+-- before the cast, opts.repeating: "!" so Auto Shot is not toggled off when already on,
+-- opts.keepTarget: assist only without a live enemy target (warrior, often the leader),
+-- opts.castPre: "/cast" options tried before the spell (warrior stance swap).
 local function AssistButton(key, spellID, opts)
 	opts = opts or {}
 	local name, icon = SpellNameIcon(spellID)
@@ -1379,6 +1439,8 @@ local function AssistButton(key, spellID, opts)
 	b.stopFollow = opts.stopFollow
 	b.pre = opts.pre or ""
 	b.bang = opts.repeating and "!" or ""
+	b.assist = opts.keepTarget and "[noharm][dead] " or ""
+	b.castPre = opts.castPre or ""
 	b.hint = "Prend la cible du partenaire puis lance le sort" .. (opts.stopFollow and "\nArrete le follow avant l'incantation" or "")
 	b.noDesat = true
 	assistButtons[#assistButtons + 1] = b
@@ -1388,8 +1450,8 @@ end
 local function UpdateAssistButtons(unit)
 	for _, b in ipairs(assistButtons) do
 		if b.spellName then
-			b:SetAttribute("macrotext", ("/assist %s\n%s%s/cast [harm,nodead] %s%s")
-				:format(unit, b.stopFollow and STOP_FOLLOW or "", b.pre, b.bang, b.spellName))
+			b:SetAttribute("macrotext", ("/assist %s%s\n%s%s/cast %s[harm,nodead] %s%s")
+				:format(b.assist, unit, b.stopFollow and STOP_FOLLOW or "", b.pre, b.castPre, b.bang, b.spellName))
 		end
 	end
 end
@@ -1534,6 +1596,57 @@ local function BuildHunterButtons()
 	-- "!Attack" so an attack already running is not toggled off
 	local melee = AssistButton("Melee", HUNTER_SPELL.Attack, { pre = PET .. "/startattack\n", repeating = true })
 	melee.hint = "Prend la cible du partenaire, familier a l'attaque, attaque au corps a corps"
+	WaitButton()
+end
+
+-- Warrior attacks, created at login. The warrior usually leads: it keeps its own live enemy
+-- target and only takes the partner's without one. Every attack stops following (the
+-- follow would drag the warrior away from its target); Battle Shout keeps following.
+local warriorBuilt = false
+local function BuildWarriorButtons()
+	local _, class = UnitClass("player")
+	if class ~= "WARRIOR" or warriorBuilt then return end
+	warriorBuilt = true
+	local TARGET_HINT = "Garde ta cible ennemie, sinon prend celle du partenaire"
+	local function attack(key, spellID, opts)
+		opts = opts or {}
+		opts.keepTarget, opts.stopFollow = true, true
+		opts.pre = opts.pre or "/startattack\n"
+		local b = AssistButton(key, spellID, opts)
+		b.hint = TARGET_HINT .. "\nArrete le follow (il t'eloignerait de la cible), attaque auto"
+		return b
+	end
+
+	local shoutName, shoutIcon = SpellNameIcon(WARRIOR_SPELL.BattleShout)
+	local shout = MakeButton("Shout", shoutName or "Battle Shout", shoutIcon or "Interface\\Icons\\Ability_Warrior_BattleShout", true, 2)
+	shout:SetAttribute("type", "spell")
+	shout:SetAttribute("spell", shoutName or "Battle Shout")
+	shout.noDesat = true
+	shout.hint = "Toi et le groupe, garde le follow"
+
+	-- Charge: out of combat only, in Battle Stance (1st press swaps stance if needed, 2nd press charges)
+	local battle = SpellNameIcon(WARRIOR_SPELL.BattleStance) or "Battle Stance"
+	attack("Charge", WARRIOR_SPELL.Charge, { pre = "", castPre = ("[nostance:1,nocombat,harm,nodead] %s; "):format(battle) }).hint =
+		TARGET_HINT .. "\nArrete le follow, passe en posture de combat si besoin (1er appui, hors combat) puis charge"
+
+	-- Melee: with Click-to-Move, /interact walks to the target (like the Talk button); nothing without an enemy target
+	local melee = AssistButton("Melee", WARRIOR_SPELL.Attack, { keepTarget = true, repeating = true,
+		pre = "/stopmacro [noharm][dead]\n" .. STOP_FOLLOW .. "/startattack\n/interact\n" })
+	melee.hint = TARGET_HINT .. ", arrete le follow et attaque au corps a corps\nAvec le Click-to-Move, marche jusqu'a la cible"
+
+	attack("Strike", WARRIOR_SPELL.HeroicStrike)
+	attack("Rend", WARRIOR_SPELL.Rend)
+	attack("Sunder", WARRIOR_SPELL.Sunder)
+	attack("Clap", WARRIOR_SPELL.ThunderClap)
+	attack("Hamstring", WARRIOR_SPELL.Hamstring)
+	attack("Overpower", WARRIOR_SPELL.Overpower)
+	attack("Execute", WARRIOR_SPELL.Execute)
+
+	-- Taunt: Defensive Stance (1st press swaps stance if needed, 2nd press taunts)
+	local defensive = SpellNameIcon(WARRIOR_SPELL.DefensiveStance) or "Defensive Stance"
+	attack("Taunt", WARRIOR_SPELL.Taunt, { castPre = ("[nostance:2,harm,nodead] %s; "):format(defensive) }).hint =
+		TARGET_HINT .. "\nArrete le follow, passe en posture defensive si besoin (1er appui) puis provoque"
+
 	WaitButton()
 end
 
@@ -1857,7 +1970,12 @@ for key, label in pairs({
 	Wand = "Baguette + assist (pretre)", Wait = "Wait / stop follow", Drink = "Boire (pretre)",
 	Shoot = "Tir auto + assist + stop follow (chasseur)", Serpent = "Morsure de serpent + assist (chasseur)",
 	Arcane = "Tir des arcanes + assist (chasseur)", Raptor = "Attaque du raptor + assist (chasseur)",
-	Melee = "Attaque corps a corps + assist (chasseur)",
+	Melee = "Attaque corps a corps + assist (chasseur, guerrier)",
+	Shout = "Cri de guerre (guerrier)", Charge = "Charge + assist + stop follow (guerrier)",
+	Strike = "Frappe heroique + assist (guerrier)", Rend = "Pourfendre + assist (guerrier)",
+	Sunder = "Fracasser armure + assist (guerrier)", Clap = "Coup de tonnerre + assist (guerrier)",
+	Hamstring = "Brise-genou + assist (guerrier)", Overpower = "Fulgurance + assist (guerrier)",
+	Execute = "Execution + assist (guerrier)", Taunt = "Provocation + assist (guerrier)",
 }) do
 	_G["BINDING_NAME_CLICK DuoBoxBtn" .. key .. ":LeftButton"] = label
 end
@@ -1983,6 +2101,7 @@ f:SetScript("OnEvent", function(self, event, ...)
 		end
 		BuildPriestButtons()
 		BuildHunterButtons()
+		BuildWarriorButtons()
 		BuildConfigButton()
 		ApplyCastLayout()
 		UpdateHotkeys()
@@ -2109,7 +2228,7 @@ f:SetScript("OnEvent", function(self, event, ...)
 			if msg == ERR_BADATTACKFACING or msg == SPELL_FAILED_UNIT_NOT_INFRONT then
 				SendComm("FW")
 			end
-			if DB.castbar and RELAYED_ERRORS[msg] and GetTime() - lastErrSent > 0.8 then
+			if DB.castbar and IsRelayedError(msg) and GetTime() - lastErrSent > 0.8 then
 				SendComm("ER:" .. msg:sub(1, 200))
 				lastErrSent = GetTime()
 			end

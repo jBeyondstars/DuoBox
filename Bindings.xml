@@ -25,4 +25,14 @@
 	<Binding name="CLICK DuoBoxBtnArcane:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnRaptor:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnMelee:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnShout:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnCharge:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnStrike:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnRend:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnSunder:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnClap:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnHamstring:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnOverpower:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnExecute:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnTaunt:LeftButton" category="ADDONS"/>
 </Bindings>

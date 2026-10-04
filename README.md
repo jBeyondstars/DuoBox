@@ -2,7 +2,7 @@
 
 ![DuoBox voice to action: say “heal”, VoiceKeys recognizes the phrase offline and sends F7 to the active Priest client to heal your partner. Two monitors show the Hunter and Priest clients side by side; the command examples are not exhaustive.](docs/assets/voice-to-action.png)
 
-World of Warcraft Classic addon for duo-boxing a healer (priest) and a DPS (hunter) on two clients,
+World of Warcraft Classic addon for duo-boxing a healer (priest) and a DPS (hunter or warrior) on two clients,
 without any key broadcasting: **1 key press = 1 action in 1 client**.
 
 **Voice to action:** say **“heal”** → offline **VoiceKeys** recognition → **F7** → heal your partner.

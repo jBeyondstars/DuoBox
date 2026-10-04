@@ -247,7 +247,7 @@ local leaderState = Note(general, 250, -122, 200)
 for i, r in ipairs({ { nil, "Auto (le dps mene)" }, { "heal", "Heal" }, { "dps", "DPS" } }) do
 	local value = r[1]
 	local cb = CheckBox(general, ({ 0, 160, 240 })[i], -136, r[2],
-		(value and ("Le " .. r[2] .. " mene, l'autre le suit.") or "Le dps (chasseur) mene, le heal (pretre) le suit.")
+		(value and ("Le " .. r[2] .. " mene, l'autre le suit.") or "Le dps (chasseur, guerrier) mene, le heal (pretre) le suit.")
 		.. " Envoye au partenaire s'il est dans le groupe.")
 	cb:SetScript("OnClick", function() ns.Set("leader", value); ns.RefreshOptions() end)
 	cb.Refresh = function(self) self:SetChecked(DB().leader == value) end
@@ -352,7 +352,7 @@ Header(display, COL2, 0, "Orientation du pretre")
 Toggle(display, COL2, -18, "facing", "Indicateur d'orientation", "Indique au chasseur si le pretre fait face a la cible (quand le pretre suit).")
 Toggle(display, COL2, -42, "facingInvert", "Inverser gauche / droite", "Si la direction indiquee est fausse.")
 Slider(display, COL2, -74, "facingDist", "Distance chasseur - cible", 5, 40, 1, "%d m",
-	"Distance estimee pour calculer l'angle quand le familier n'est pas au contact.")
+	"Distance estimee pour calculer l'angle quand le familier n'est pas au contact. Avec un guerrier (corps a corps), 3 m sont utilises.")
 Button(display, COL2, -118, 200, "Diagnostic orientation", Run("facing debug"),
 	"Affiche dans le chat les valeurs que le client peut lire.")
 local moveBtn2 = Button(display, COL2, -144, 200, "", Run("move"),
