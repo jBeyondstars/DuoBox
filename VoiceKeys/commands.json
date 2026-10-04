@@ -1,6 +1,6 @@
 {
     "language": "en-US",
-    "audioDevice": "Focusrite",
+    "audioDevice": 1,
     "voskModel": "model",
     "voskMinConfidence": 0.6,
     "noiseGate": "auto",
@@ -44,9 +44,10 @@
         { "key": "T",        "label": "Talk (NPC quests)",  "phrases": [ "talk" ] },
         { "key": "SHIFT-F6",        "label": "Shadow Word: Pain",  "phrases": [ "dot" ] },
  { "key": "SPACE",        "label": "Jump",  "phrases": [ "jump" ] },
-        { "key": "ALT-F1",   "label": "Hunter: Auto Shot",     "phrases": [ "shoot" ] },
-        { "key": "ALT-F2",   "label": "Hunter: Serpent Sting", "phrases": [ "serpent" ] },
-        { "key": "ALT-F3",   "label": "Hunter: Arcane Shot",   "phrases": [ "arcane" ] },
-        { "key": "ALT-F5",   "label": "Hunter: Raptor Strike", "phrases": [ "raptor" ] }
+        { "key": "F12",      "label": "Hunter: Auto Shot",     "phrases": [ "shoot" ] },
+        { "key": "SHIFT-F6", "label": "Hunter: Serpent Sting", "phrases": [ "serpent" ] },
+        { "key": "F11",      "label": "Hunter: Arcane Shot",   "phrases": [ "arcane" ] },
+        { "key": "CTRL-F11", "label": "Hunter: Raptor Strike", "phrases": [ "raptor" ] },
+        { "key": "SHIFT-F12", "label": "Hunter: Melee attack",  "phrases": [ "melee" ] }
     ]
 }

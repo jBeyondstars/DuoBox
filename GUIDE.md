@@ -93,11 +93,11 @@ Health, mana, pet and aggro alerts do not change: they depend on the role (heal 
 Always shown, semi-transparent, opaque on mouse-over. Shift+drag to move it, `/duo bar off` to hide it,
 `/duo scale 1.3` to resize it. Icons are greyed out when the partner is not in the group.
 
-- **Row 1**: **Follow** · **Target** · **Assist** · **Talk** (same as the D-Talk macro) · **Sit** (`/sit`) · **Trade** · **Invite** · **Compare quests** · **Share last quest** · **Key bindings** (gear).
+- **Row 1**: **Follow** (toggle: follows the partner, or stops following if already following) · **Target** · **Assist** · **Talk** (same as the D-Talk macro) · **Sit** (`/sit`) · **Trade** · **Invite** · **Compare quests** · **Share last quest** · **Key bindings** (gear).
 - **Row 2 (priest only)**: **Fortitude** · **Shield** · **Renew** · **Heal** (Lesser Heal, then Heal once learned) · **Dispel** ·
   **Resurrection** · **Smite**, **Smite + Wait**, **Shadow Word: Pain** and **Wand** (assist the hunter + spell) · **Wait** (stop following) · **Drink** (best drink in your bags for your level).
 - **Row 2 (hunter only)**, for when the hunter follows the priest: **Auto Shot**, **Serpent Sting**, **Arcane Shot**,
-  **Raptor Strike** (assist the priest + pet attacks + shot) · **Wait** (stop following).
+  **Raptor Strike** (assist the priest + pet attacks + shot) · **Melee** (assist + pet attacks + melee auto-attack) · **Wait** (stop following).
   **Auto Shot** stops following first (it does not fire while moving) and does not toggle it off if already active.
 - Fortitude / Shield / Renew / Heal / Dispel: click = partner, **Shift** = partner's pet, **Ctrl** = yourself.
 - **Heal**, **Resurrection** and **Smite + Wait** stop following before casting (moving would interrupt the cast):
@@ -185,6 +185,7 @@ D-Wand keeps following.
 | D-Shoot | assist the priest + stop following + pet attacks + Auto Shot |
 | D-Serpent / D-Arcane | assist the priest + pet attacks + Serpent Sting / Arcane Shot (keeps following) |
 | D-Raptor | assist the priest + pet attacks + melee attack + Raptor Strike |
+| D-Melee | assist the priest + pet attacks + melee auto-attack |
 
 **D-Talk**: the macro targets the partner's target, arms DuoBox for 20 s (`/duo npc`) and interacts with the NPC (`/interact`).
 While armed, DuoBox opens the NPC's quests, turns in completed ones first, accepts available ones, and takes the reward
@@ -232,7 +233,7 @@ and downloads the English model `vosk-model-small-en-us-0.15` (~40 MB) into `Voi
 
 | Phrase | Key | Phrase | Key |
 |---|---|---|---|
-| follow / follow me | F1 | wait | F6 |
+| follow / follow me | F1 (toggle: say it again to stop) | wait | S |
 | buff | F2 | heal / heal me | F7 |
 | buff pet | Shift+F2 | drink | F8 |
 | assist | F3 | dispel | F9 |
@@ -240,21 +241,23 @@ and downloads the English model `vosk-model-small-en-us-0.15` (~40 MB) into `Voi
 | shield pet | Shift+F4 | smite | F11 |
 | renew | F5 | wand | F12 |
 | renew pet | Shift+F5 | interact | ² |
-| talk | T (D-Talk macro) | dot | Y (Shadow Word: Pain) |
+| talk | T (D-Talk macro) | dot | Shift+F6 (Shadow Word: Pain) |
 | buff yourself | Ctrl+F2 | heal yourself | Ctrl+F7 |
 | sit | F6 (Sit button) | smite wait | Shift+F11 (Smite + Wait) |
 
 Hunter commands, for when the hunter follows the priest (`/duo lead heal`). Bind these keys on the hunter with `/duo keys`
-(row 2 of the hunter), and speak while the hunter window is focused. They use Alt+F keys, unused on the priest, so saying
-them on the wrong window does nothing (Alt+F4 is skipped: Windows closes the window). The shared commands (follow, wait,
-assist, talk, interact, sit) work on the hunter too if you bind the same keys there.
+(row 2 of the hunter), and speak while the hunter window is focused. They reuse the priest's attack keys (no Alt keys:
+Alt+F4 closes the window and Alt+key is unreliable), so saying them on the priest window casts the priest's equivalent
+(e.g. "shoot" = F12 = Wand). The shared commands (follow, wait, assist, talk, interact, sit) work on the hunter too
+if you bind the same keys there.
 
-| Phrase | Key | Hunter button |
-|---|---|---|
-| shoot | Alt+F1 | Auto Shot (assist + stop following + pet attack) |
-| serpent | Alt+F2 | Serpent Sting |
-| arcane | Alt+F3 | Arcane Shot |
-| raptor | Alt+F5 | Raptor Strike |
+| Phrase | Key | Hunter button | Same key on the priest |
+|---|---|---|---|
+| shoot | F12 | Auto Shot (assist + stop following + pet attack) | Wand |
+| serpent | Shift+F6 | Serpent Sting | Shadow Word: Pain |
+| arcane | F11 | Arcane Shot | Smite |
+| raptor | Ctrl+F11 | Raptor Strike | (unused) |
+| melee | Shift+F12 | Melee auto-attack | (unused) |
 
 Settings in `commands.json`:
 - `commands`: key and phrases (several phrases per command are allowed).

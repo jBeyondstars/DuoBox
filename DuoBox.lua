@@ -1129,6 +1129,7 @@ local function MacroList()
 			{ "D-Serpent", ("#showtooltip Serpent Sting\n/assist %s\n/petattack\n/cast [harm,nodead] Serpent Sting"):format(T) },
 			{ "D-Arcane",  ("#showtooltip Arcane Shot\n/assist %s\n/petattack\n/cast [harm,nodead] Arcane Shot"):format(T) },
 			{ "D-Raptor",  ("#showtooltip Raptor Strike\n/assist %s\n/petattack\n/startattack\n/cast [harm,nodead] Raptor Strike"):format(T) },
+			{ "D-Melee",   ("#showtooltip Attack\n/assist %s\n/petattack\n/startattack"):format(T) },
 		}
 		if DB.partner then
 			table.insert(list, { "D-Invite", ("/invite %s"):format(DB.partner) })
@@ -1266,9 +1267,15 @@ local function SpellNameIcon(id)
 	end
 end
 
--- Follow (secure macro)
-local btnFollow = MakeButton("Follow", "Follow","Interface\\Icons\\Ability_Rogue_Sprint", true)
-btnFollow:SetAttribute("type", "macro")
+-- Follow toggle (not protected): follows the partner, or stops following if already
+-- following (following yourself = /follow player). State from AUTOFOLLOW_BEGIN/END.
+local btnFollow = MakeButton("Follow", "Follow / unfollow","Interface\\Icons\\Ability_Rogue_Sprint", false)
+btnFollow.hint = "Suit le partenaire, ou arrete le follow si tu le suis deja"
+btnFollow:SetScript("OnClick", function()
+	if selfFollowing then FollowUnit("player"); return end
+	local unit = PartnerUnit()
+	if unit then FollowUnit(unit) else Print("aucun partenaire dans le groupe.") end
+end)
 
 -- Target
 local btnTarget = MakeButton("Target", "Cibler","Interface\\Icons\\Ability_Hunter_SniperShot", true)
@@ -1350,7 +1357,7 @@ local DRINKS = {
 }
 
 -- Hunter shots (second row when the hunter follows the priest)
-local HUNTER_SPELL = { AutoShot = 75, SerpentSting = 1978, ArcaneShot = 3044, RaptorStrike = 2973 }
+local HUNTER_SPELL = { AutoShot = 75, SerpentSting = 1978, ArcaneShot = 3044, RaptorStrike = 2973, Attack = 6603 }
 
 -- Virtual mouse buttons sent by the Ctrl/Shift+key override bindings: the target then
 -- comes from "*unit-DuoSelf" / "*unit-DuoPet" and does not depend on the modifier state
@@ -1523,6 +1530,9 @@ local function BuildHunterButtons()
 	AssistButton("Serpent", HUNTER_SPELL.SerpentSting, { pre = PET }) -- instant: keeps following
 	AssistButton("Arcane", HUNTER_SPELL.ArcaneShot, { pre = PET })
 	AssistButton("Raptor", HUNTER_SPELL.RaptorStrike, { pre = PET .. "/startattack\n" })
+	-- "!Attack" so an attack already running is not toggled off
+	local melee = AssistButton("Melee", HUNTER_SPELL.Attack, { pre = PET .. "/startattack\n", repeating = true })
+	melee.hint = "Prend la cible du partenaire, familier a l'attaque, attaque au corps a corps"
 	WaitButton()
 end
 
@@ -1621,7 +1631,6 @@ local function UpdateBar()
 	barPending = false
 	local unit, idx = PartnerUnit()
 	unit = unit or "party1"
-	btnFollow:SetAttribute("macrotext", "/follow " .. unit)
 	btnTarget:SetAttribute("unit", unit)
 	btnAssist:SetAttribute("macrotext", "/assist " .. unit)
 	btnTalk:SetAttribute("macrotext", ("/assist %s\n/duo npc\n/interact"):format(unit))
@@ -1836,7 +1845,7 @@ end
 -- Names shown in the game Key Bindings menu (see Bindings.xml)
 BINDING_HEADER_DUOBOX = "DuoBox"
 for key, label in pairs({
-	Follow = "Follow partenaire", Target = "Cibler partenaire", Assist = "Assister partenaire",
+	Follow = "Follow / unfollow partenaire", Target = "Cibler partenaire", Assist = "Assister partenaire",
 	Talk = "Parler au PNJ du partenaire (quetes)", Sit = "S'asseoir",
 	Trade = "Echange avec partenaire", Invite = "Inviter partenaire", Quests = "Comparer les quetes",
 	LastQuest = "Partager la derniere quete", Fort = "Robustesse (pretre)",
@@ -1847,6 +1856,7 @@ for key, label in pairs({
 	Wand = "Baguette + assist (pretre)", Wait = "Wait / stop follow", Drink = "Boire (pretre)",
 	Shoot = "Tir auto + assist + stop follow (chasseur)", Serpent = "Morsure de serpent + assist (chasseur)",
 	Arcane = "Tir des arcanes + assist (chasseur)", Raptor = "Attaque du raptor + assist (chasseur)",
+	Melee = "Attaque corps a corps + assist (chasseur)",
 }) do
 	_G["BINDING_NAME_CLICK DuoBoxBtn" .. key .. ":LeftButton"] = label
 end

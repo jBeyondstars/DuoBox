@@ -24,4 +24,5 @@
 	<Binding name="CLICK DuoBoxBtnSerpent:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnArcane:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK DuoBoxBtnRaptor:LeftButton" category="ADDONS"/>
+	<Binding name="CLICK DuoBoxBtnMelee:LeftButton" category="ADDONS"/>
 </Bindings>
