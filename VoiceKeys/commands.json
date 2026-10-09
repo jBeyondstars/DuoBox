@@ -46,8 +46,9 @@
  { "key": "SPACE",        "label": "Jump",  "phrases": [ "jump" ] },
         { "key": "F12",      "label": "Hunter: Auto Shot",     "phrases": [ "shoot" ] },
         { "key": "SHIFT-F6", "label": "Hunter: Serpent Sting", "phrases": [ "serpent" ] },
-        { "key": "F11",      "label": "Hunter: Arcane Shot",   "phrases": [ "arcane" ] },
+        { "key": "F11",      "label": "Hunter: Serpent Sting + Arcane Shot", "phrases": [ "arcane" ] },
         { "key": "CTRL-F11", "label": "Hunter: Raptor Strike", "phrases": [ "raptor" ] },
+        { "key": "SHIFT-F10", "label": "Hunter: Concussive Shot / Warrior: Hamstring", "phrases": [ "slow" ] },
         { "key": "SHIFT-F12", "label": "Hunter/Warrior: Melee attack", "phrases": [ "melee" ] },
         { "key": "F2",        "label": "Warrior: Battle Shout",  "phrases": [ "shout", "battle shout" ] },
         { "key": "F12",       "label": "Warrior: Charge",        "phrases": [ "charge" ] },
@@ -58,6 +59,9 @@
         { "key": "SHIFT-F10", "label": "Warrior: Hamstring",     "phrases": [ "hamstring" ] },
         { "key": "SHIFT-F8",  "label": "Warrior: Overpower",     "phrases": [ "overpower" ] },
         { "key": "SHIFT-F3",  "label": "Warrior: Execute",       "phrases": [ "execute" ] },
-        { "key": "SHIFT-F1",  "label": "Warrior: Taunt",         "phrases": [ "taunt" ] }
+        { "key": "SHIFT-F1",  "label": "Warrior: Taunt",         "phrases": [ "taunt" ] },
+        { "key": "CTRL-F10",  "label": "Warrior: multi-target Rotation until the end of the fight", "phrases": [ "multi" ] },
+        { "key": "CTRL-F2",   "label": "Warrior: Defensive Stance (WoW stance bar)", "phrases": [ "defense" ] },
+        { "key": "CTRL-F8",   "label": "Warrior: Kick (Shield Bash / Pummel)", "phrases": [ "kick" ] }
     ]
 }

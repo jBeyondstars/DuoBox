@@ -217,7 +217,7 @@ end
 
 Button(general, 232, -37, 110, "Ma cible", function()
 	local name
-	if UnitIsPlayer("target") and not UnitIsUnit("target", "player") then
+	if SecretFree(UnitIsPlayer("target")) and not SecretFree(UnitIsUnit("target", "player")) then
 		name = SecretFree(UnitName("target"))
 	elseif GetNumGroupMembers() == 2 then
 		name = SecretFree(UnitName("party1"))
@@ -283,8 +283,17 @@ end
 controls[#controls + 1] = moveBtn
 Button(general, COL2 - 6, -268, BW, "Afficher l'etat dans le chat", Run("status"),
 	"Resume des reglages et de l'unite du partenaire detectee.")
+Button(general, 0, -294, BW, "Sorts du bouton Rotation", function()
+	ns.Command("rotation")
+	local rotation = _G.DuoBoxRotation
+	if rotation and rotation:IsShown() then
+		rotation:ClearAllPoints()
+		rotation:SetPoint("TOPLEFT", panel, "TOPRIGHT", 4, 0)
+		rotation:Raise()
+	end
+end, "Guerrier : choisit les sorts du bouton Rotation et leur ordre (aussi clic droit sur le bouton).")
 
-Note(general, 0, -300, 450):SetText("|cff999999Toutes ces options existent aussi en commande : /duo help.|r")
+Note(general, COL2 - 6, -299, 222):SetText("|cff999999Toutes ces options existent aussi en commande : /duo help.|r")
 
 --------------------------------------------------------------------------------
 -- Page 2: Alerts
@@ -331,6 +340,43 @@ Toggle(auto, 0, -122, "autoShare", "Partager automatiquement les quetes acceptee
 Toggle(auto, 0, -146, "autoNpc", "Bouton Parler / D-Talk : accepter et rendre les quetes du PNJ",
 	"Apres le bouton Parler (ou la macro D-Talk), DuoBox accepte et rend les quetes du PNJ pendant 20 s.")
 
+Header(auto, 0, -184, "Touche d'interaction")
+Toggle(auto, 0, -202, "interactEnemy", "La cible ennemie avant les objets et PNJ proches",
+	"Quand ta cible est un ennemi vivant (en combat : aussi celle du partenaire), la touche d'interaction va sur ta cible "
+	.. "(attaque, et marche jusqu'a elle avec le Click-to-Move) au lieu de l'objet ou du PNJ le plus proche. "
+	.. "Ennemi mort et combat fini : elle ramasse de nouveau. /duo interact : etat. Active par defaut sur le guerrier.")
+
+Header(auto, 0, -236, "Donjon")
+Toggle(auto, 0, -254, "dungeon", "Mode donjon : les assists prennent la cible du tank",
+	"Boutons d'attaque, bouton Assister, Rotation et lignes /assist des macros D-xxx prennent la cible du tank "
+	.. "au lieu de celle du partenaire. Follow, Parler et les soins du pretre restent sur le partenaire. "
+	.. "A activer sur les deux persos. /duo dungeon on|off")
+
+local tankEdit = CreateFrame("EditBox", nil, auto, "InputBoxTemplate")
+tankEdit:SetSize(150, 20)
+tankEdit:SetPoint("TOPLEFT", 6, -282)
+tankEdit:SetAutoFocus(false)
+tankEdit:SetMaxLetters(48)
+local function ApplyTank(name)
+	name = (name or ""):match("^%s*(.-)%s*$")
+	ns.Command("tank " .. (name ~= "" and name or "auto"))
+end
+tankEdit:SetScript("OnEnterPressed", function(self) ApplyTank(self:GetText()); self:ClearFocus() end)
+tankEdit:SetScript("OnEscapePressed", function(self) self:ClearFocus(); ns.RefreshOptions() end)
+tankEdit.Refresh = function(self) if not self:HasFocus() then self:SetText(DB().tank or "") end end
+Tooltip(tankEdit, "Nom du tank", "Vide (ou Auto) : le membre du groupe au role Tank (clic droit sur son portrait > Role).")
+controls[#controls + 1] = tankEdit
+Button(auto, 166, -281, 90, "Ma cible", function()
+	if SecretFree(UnitIsPlayer("target")) then
+		ApplyTank(SecretFree(UnitName("target")))
+	else
+		Print("cible le tank puis reessaie.")
+	end
+end, "Prend le joueur cible comme tank.")
+Button(auto, 262, -281, 80, "Auto", function() ApplyTank("") end,
+	"Le membre du groupe au role Tank (clic droit sur son portrait > Role > Tank, ou appel aux roles).")
+local dungeonState = Note(auto, 0, -306, 450)
+
 --------------------------------------------------------------------------------
 -- Page 4: Display
 --------------------------------------------------------------------------------
@@ -359,6 +405,10 @@ local moveBtn2 = Button(display, COL2, -144, 200, "", Run("move"),
 	"Affiche la barre de cast et l'orientation pour les deplacer. Recliquer pour enregistrer.")
 moveBtn2.Refresh = moveBtn.Refresh
 controls[#controls + 1] = moveBtn2
+Toggle(display, COL2, -174, "meleeLight", "Voyant du guerrier (portee / orientation)",
+	"Grand voyant chez le partenaire pendant les combats du guerrier : vert = au corps a corps et oriente, "
+	.. "rouge = trop loin, mal oriente (a la premiere attaque ratee) ou sans cible. Deplacable avec le bouton ci-dessus. "
+	.. "A laisser actif sur les deux persos. /duo light on|off")
 
 Header(display, 0, -200, "Detections de metiers sur la minimap")
 Toggle(display, 0, -218, "tracking", "Partager les detections (experimental)",
@@ -403,6 +453,7 @@ local function RefreshLive()
 	leaderState:SetText(ns.IsLeader() and "|cff40ff40Tu menes|r" or "|cffffd040Tu suis le partenaire|r")
 	rxpState:SetText(ns.RXPState and ("Etat : " .. ns.RXPState()) or "")
 	trackingState:SetText(ns.TrackingState and ns.TrackingState() or "")
+	dungeonState:SetText(ns.DungeonStatus and ns.DungeonStatus() or "")
 end
 
 function ns.RefreshOptions()

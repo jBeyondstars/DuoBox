@@ -6,7 +6,12 @@
 ## OptionalDeps: RXPGuides, GatherLite, TomTom, Questie
 ## SavedVariablesPerCharacter: DuoBoxDB
 
+Spellbook.lua
 DuoBox.lua
 PartnerQuests.lua
 PartnerTracking.lua
+InteractPriority.lua
+Dungeon.lua
+MeleeLight.lua
+Rotation.lua
 Options.lua

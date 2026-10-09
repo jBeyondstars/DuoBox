@@ -72,6 +72,18 @@ The setting is sent to the partner when it is in the group (otherwise type it on
 
 Health, mana, pet and aggro alerts do not change: they depend on the role (heal / dps).
 
+### Dungeon mode: assist the tank
+In a group with a tank, `/duo dungeon on` (or the Automation tab of the options panel), on both characters:
+the attack buttons of the bar, the **Assist** button, **Rotation** and the `/assist` lines of the D- macros take the
+**tank's target** instead of the partner's. Follow, Talk and the priest's heals stay on the partner.
+- The tank is the group member whose role is **Tank**: right-click their portrait > Role > Tank, or a role check.
+  Inside instances the client may hide roles from addons: DuoBox keeps the last tank it read.
+- `/duo tank <Name>` (or "Ma cible" in the options) sets it by hand, before the role; `/duo tank auto` goes back to the role.
+- No tank found, or you are the tank: the partner, as outside dungeon mode. The warrior's attacks still keep its
+  own live enemy target first; the row 1 Assist button always takes the tank's (or partner's) target.
+- The D- macros now name the partner's and the tank's unit (party1..party4), not party1 only: DuoBox rewrites the
+  existing D- macros when these units change (group of 5, dungeon mode on or off, new tank), out of combat.
+
 ### Alerts
 - **On the priest client**: hunter below 50% health, pet below 35%, hunter dead, aggro on the priest.
 - **On the hunter client**: priest below 50% health, priest mana below 20%, aggro on the priest, priest dead.
@@ -98,23 +110,64 @@ Always shown, semi-transparent, opaque on mouse-over. Shift+drag to move it, `/d
 - **Row 2 (priest only)**: **Fortitude** · **Shield** · **Renew** · **Heal** (Lesser Heal, then Heal once learned) · **Dispel** ·
   **Resurrection** · **Smite**, **Smite + Wait**, **Shadow Word: Pain** and **Wand** (assist the hunter + spell) · **Wait** (stop following) · **Drink** (best drink in your bags for your level).
 - **Row 2 (hunter only)**, for when the hunter follows the priest: **Auto Shot**, **Serpent Sting**, **Arcane Shot**,
-  **Raptor Strike** (assist the priest + pet attacks + shot) · **Melee** (assist + pet attacks + melee auto-attack) · **Wait** (stop following).
+  **Concussive Shot**, **Raptor Strike** (assist the priest + pet attacks + shot) · **Melee** (assist + pet attacks + melee auto-attack) · **Wait** (stop following).
   **Auto Shot** stops following first (it does not fire while moving) and does not toggle it off if already active.
-- **Row 2 (warrior only)**: **Battle Shout** · **Charge** · **Melee** · **Heroic Strike**, **Rend**, **Sunder Armor**,
-  **Thunder Clap**, **Hamstring**, **Overpower**, **Execute**, **Taunt** · **Wait** (stop following).
+  **Arcane Shot** and **Concussive Shot** also stop following, so Auto Shot keeps firing after them.
+  **Arcane Shot** casts Serpent Sting first on a new target (or after combat), then Arcane Shot; the 3rd Arcane Shot
+  (~18 s) loops back to Serpent Sting (lasts 15 s). It always takes the priest's target, so it follows the priest's
+  target switches in combat. It does not see the real debuff (resist, dispel).
+- **Row 2 (warrior only)**: **Battle Shout** · **Charge** · **Melee** · **Rotation** · **Multi** · **Heroic Strike**, **Rend**, **Sunder Armor**,
+  **Thunder Clap**, **Hamstring**, **Overpower**, **Execute**, **Taunt**, **Kick** · **Wait** (stop following).
   The warrior usually leads, so its attacks **keep its own enemy target** and only take the partner's when it has none
   (no target, a friendly or a dead one); the **Assist** button of row 1 forces the partner's target.
   Every attack stops following (the follow would drag the warrior away from its target) and starts the melee auto-attack;
   Battle Shout keeps following.
   **Charge** switches to Battle Stance first when needed (first press, out of combat only) and charges on the next press;
-  **Taunt** does the same with Defensive Stance. **Melee** attacks the target and, with Click-to-Move enabled
+  in combat, where Charge cannot be used, it switches to the partner's target instead (only a live enemy one);
+  **Taunt** does the same with Defensive Stance (a stance must be active before the game allows the spell, hence the
+  two presses). **Kick** interrupts: Shield Bash with a shield equipped (the game allows it in Battle or Defensive
+  Stance), Pummel without a shield or in Berserker Stance (the game allows Pummel in Berserker Stance only).
+  **Melee** attacks the target and, with Click-to-Move enabled
   (Interface options → Mouse), walks to it like the Talk button; it does nothing without an enemy target.
+  **Rotation** is a one-button attack for a pedal or a single key, with the same target and follow rules as the other
+  attacks: each press casts the first usable spell of your list, from top to bottom (default: Battle Shout when it is
+  missing, otherwise Overpower when the game allows it, otherwise Heroic Strike). The game itself skips what is not
+  usable, so 1 press = 1 action; see "Rotation panel" below to change the list.
+  The expected failures of a press (Overpower not ready, global cooldown, not enough rage, wrong stance) are hidden,
+  silent and not relayed to the partner.
+  **Multi** (key, or the voice command "multi") switches Rotation to its multi-target spells until the end of the
+  fight, for example Thunder Clap on a pack; it casts nothing itself. Pressed out of combat, it is kept for the next
+  fight, until its end. Rotation and Multi glow while it is on, and the chat says when it starts and stops;
+  right-click Multi to go back to single target. Put the multi-target spells above Heroic Strike in the list (or mark
+  Heroic Strike "Mono seulement"): queued on every press, it spends the rage Thunder Clap needs. A macro cannot count enemies and an addon cannot change it during a
+  fight: Blizzard's secure "attribute" action, triggered by your press, is what writes the multi-target macro.
 - Fortitude / Shield / Renew / Heal / Dispel: click = partner, **Shift** = partner's pet, **Ctrl** = yourself.
 - **Heal**, **Resurrection** and **Smite + Wait** stop following before casting (moving would interrupt the cast):
   follow again afterwards. **Wand** keeps following (use **Wait** first if the priest must stand still).
   Fortitude gets a golden border when a buff is missing or expires in less than 2 minutes (out of combat only).
 - **Compare quests** shares your quests that the partner is missing and tells you which ones they have in addition
   (then click "Compare" on their window).
+
+### Rotation panel (warrior)
+Right-click the **Rotation** button, `/duo rotation`, or **Sorts du bouton Rotation** in the options panel.
+The list is saved per character (10 spells at most):
+- **Add** a spell by dragging it from the spellbook onto the panel, or by typing its name and pressing Enter.
+- **Order**: arrows up / down; the game tries the spells from top to bottom on each press.
+- **Mode** of each spell:
+  - **Chaque appui** (each press): tried on every press, skipped by the game when it is not usable. This fits the
+    attacks the game gates by itself: Overpower after a dodge, Execute under 20%, a cooldown, not enough rage.
+    A spell that is always usable (Rend, Sunder Armor) would be cast on every press and block the spells below it.
+  - **1x par combat** (once per fight), for your own buffs (Battle Shout): cast before the attacks when the buff is
+    missing, or ends within 30 s, as the fight starts. Macros cannot check buffs and cannot change during a fight,
+    so this is decided out of combat and cast once (with 10 rage for Battle Shout); the icon shows the buff until then.
+    The buff must have the spell's name. If it ends during the fight, an alert names it (with the Battle Shout key),
+    only when the client can read auras in combat.
+- **Cibles** (targets) of each spell: **Toujours** (always), **Multi seulement** (only after the Multi button, e.g.
+  Thunder Clap) or **Mono seulement** (skipped in multi-target mode).
+- **Actif** (enabled): unchecked keeps the spell in the list without casting it. Spells not learned yet are skipped.
+- **Par defaut** restores Battle Shout (once per fight), Overpower, Thunder Clap (multi only), Heroic Strike.
+- The bottom of the panel shows both macros, single and multi target. Changes made in combat apply at the end of the
+  fight.
 
 ### Partner cast bar (leader screen)
 Yellow while casting, blue for an instant spell, green on success, red when interrupted / failed.
@@ -134,6 +187,15 @@ which way to turn (left / right with the angle) or that the priest is facing cor
 - Does not work in dungeons (positions are blocked there). The priest's "wrong facing" error still triggers an alert.
 - `/duo facing invert` if left/right are swapped, `/duo facing dist 30` to change the estimated distance,
   `/duo facing off` to hide it, `/duo facing debug` to see which values the client can read.
+
+### Warrior light (priest screen)
+While the warrior (or a rogue) fights, a big light on the partner's screen: **green** = in melee range of its target
+and attacking, **red** with the reason = **TROP LOIN** (too far), **MAL ORIENTE** (facing the wrong way) or
+**PAS DE CIBLE** (in combat without an enemy target). Hidden out of combat.
+- Range: the warrior's client asks the game whether its target is in range of Heroic Strike, every 0.2 s.
+- Facing: the game tells no addon whether you face a mob, so it comes from the "facing the wrong way" error of a
+  failed swing or spell: red at the first failed attack, green again after a success, a new target or 4 s.
+- On by default on both characters, `/duo light off` or the Display tab to hide it; `/duo move` to move it.
 
 ### Partner gathering detections (experimental)
 
@@ -177,6 +239,21 @@ The same actions are also in the game menu: Key Bindings → AddOns → DuoBox.
 For Fortitude / Shield / Renew / Heal / Dispel, DuoBox also routes Shift+key and Ctrl+key to the button
 (WoW binds Ctrl+F1..F10 to the stance bar by default, which would swallow Ctrl+F2). A Shift/Ctrl+key you bound
 yourself to another action is left alone.
+
+### Interact key: enemy target first
+With "Enable Interact Key" (Options → Controls), WoW's interact key (Key Bindings → Targeting → Interact With Target)
+goes to the **soft interact target** first: the object, corpse or NPC showing the interact icon, even when your target
+is an enemy. "Assist the priest + interact key" then picked up a nearby object instead of walking to the enemy.
+
+On the warrior (on by default for melee classes), DuoBox switches soft interaction off **while your target is a live
+enemy, and in combat also while the partner's target is one**: the interact key then goes to your target, starts the
+auto-attack and, with Click-to-Move enabled, walks to it. Meanwhile the interact icon disappears from objects.
+Once your enemy is dead (or you clear your target) and the fight is over, the key picks up loot and objects again,
+even if the partner already targets the next mob. In combat, while the partner targets an enemy and you have no
+target, the key does nothing: assist first.
+- The change is a temporary CVar (`SoftTargetInteract` = 0), never saved: your setting comes back by itself.
+- `/duo interact on|off`, or the Automation tab of `/duo`; `/duo interact` alone tells whether objects are skipped
+  and why. Needs WoW Forever: Classic Era 1.15 has no temporary CVars.
 
 ### RestedXP: partner objectives
 RestedXP only tracks the quests of the character it runs on. DuoBox sends each character's quest progress to the partner,
@@ -227,7 +304,9 @@ D-Wand keeps following.
 | D-Talk | target the priest's target (NPC), talk to it, accept / turn in its quests |
 | D-Follow / D-Wait | `/follow` the priest / stop following (when the priest leads) |
 | D-Shoot | assist the priest + stop following + pet attacks + Auto Shot |
-| D-Serpent / D-Arcane | assist the priest + pet attacks + Serpent Sting / Arcane Shot (keeps following) |
+| D-Serpent | assist the priest + pet attacks + Serpent Sting (keeps following) |
+| D-Arcane | same as the Arcane Shot button: assist the priest + stop following + pet attacks + Serpent Sting on a new target, then Arcane Shot ×3 |
+| D-Concussive | assist the priest + stop following + pet attacks + Concussive Shot (slow) |
 | D-Raptor | assist the priest + pet attacks + melee attack + Raptor Strike |
 | D-Melee | assist the priest + pet attacks + melee auto-attack |
 
@@ -239,16 +318,18 @@ The attacks stop following and start the melee auto-attack.
 |---|---|
 | D-Follow / D-Wait | `/follow` the priest / stop following (when the priest leads) |
 | D-Talk | target the priest's target (NPC), talk to it, accept / turn in its quests |
-| D-Charge | Battle Stance if needed (1st press, out of combat), then Charge |
+| D-Charge | Battle Stance if needed (1st press, out of combat), then Charge; in combat (Charge is not usable there) it switches to the priest's live enemy target instead |
+| D-ChargeP | always takes the priest's target (even with your own enemy target), starts the auto-attack, Battle Stance if needed then Charge; the next press after a Charge that succeeded queues Heroic Strike, once per fight (Charge rage arrives on impact, too late for the same press); out of combat also `/interact` (walks to the target with Click-to-Move); keeps following |
 | D-Melee | melee auto-attack; walks to the target with Click-to-Move |
 | D-Strike / D-Rend / D-Sunder | Heroic Strike / Rend / Sunder Armor |
 | D-Clap / D-Hamstring | Thunder Clap / Hamstring |
 | D-Overpower / D-Execute | Overpower / Execute (only when the game allows them) |
 | D-Taunt | Defensive Stance if needed (1st press), then Taunt |
+| D-Kick | same as the Kick button: Shield Bash with a shield, Pummel without one or in Berserker Stance |
 | D-Invite | invite the priest |
 
 Battle Shout needs no target: use the button of the bar or the spellbook. WoW binds the stances to Ctrl+F1 / F2 / F3
-by default (stance bar): keep those keys free on the warrior.
+by default (stance bar): keep those keys free on the warrior. The "defense" voice command sends Ctrl+F2 (Defensive Stance).
 
 **D-Talk**: the macro targets the partner's target, arms DuoBox for 20 s (`/duo npc`) and interacts with the NPC (`/interact`).
 While armed, DuoBox opens the NPC's quests, turns in completed ones first, accepts available ones, and takes the reward
@@ -318,7 +399,8 @@ if you bind the same keys there.
 |---|---|---|---|
 | shoot | F12 | Auto Shot (assist + stop following + pet attack) | Wand |
 | serpent | Shift+F6 | Serpent Sting | Shadow Word: Pain |
-| arcane | F11 | Arcane Shot | Smite |
+| arcane | F11 | Serpent Sting on a new target, then Arcane Shot (assist + stop following + pet attack) | Smite |
+| slow | Shift+F10 | Concussive Shot (assist + stop following + pet attack) | (unused) |
 | raptor | Ctrl+F11 | Raptor Strike | (unused) |
 | melee | Shift+F12 | Melee auto-attack | (unused) |
 
@@ -337,10 +419,13 @@ and say "dot".
 | melee | Shift+F12 | Melee (walks to the target with Click-to-Move) | (unused) |
 | sunder | Ctrl+F11 | Sunder Armor | (unused) |
 | thunder clap | Ctrl+F12 | Thunder Clap | (unused) |
-| hamstring | Shift+F10 | Hamstring | (unused) |
+| hamstring / slow | Shift+F10 | Hamstring | (unused) |
 | overpower | Shift+F8 | Overpower | (unused) |
 | execute | Shift+F3 | Execute | (unused) |
 | taunt | Shift+F1 | Taunt (Defensive Stance first if needed) | (unused) |
+| multi | Ctrl+F10 | Multi (Rotation in multi-target mode until the end of the fight) | (unused) |
+| defense | Ctrl+F2 | Defensive Stance (WoW's stance bar, no DuoBox button to bind) | Fortitude on yourself |
+| kick | Ctrl+F8 | Kick (Shield Bash with a shield, otherwise Pummel) | (unused) |
 
 Settings in `commands.json`:
 - `commands`: key and phrases (several phrases per command are allowed).

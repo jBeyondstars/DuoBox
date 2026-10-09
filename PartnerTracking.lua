@@ -104,7 +104,7 @@ local function Release()
 	GameTooltip:SetAlpha(saved.tooltipAlpha)
 end
 local function Blocked()
-	return InCombatLockdown() or UnitIsDeadOrGhost("player") or IsInInstance()
+	return InCombatLockdown() or Value(UnitIsDeadOrGhost("player")) or IsInInstance()
 		or (IsMouselooking and IsMouselooking()) or (SpellIsTargeting and SpellIsTargeting())
 		or not Minimap:IsVisible()
 end

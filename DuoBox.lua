@@ -29,6 +29,7 @@ local defaults = {
 	autoShare   = true,
 	autoRez     = true,
 	autoNpc     = true,   -- D-Talk macro: accept / turn in the NPC's quests
+	interactEnemy = nil,  -- interact key: a live enemy target before nearby objects / NPCs (auto: melee classes, InteractPriority.lua)
 	turnin      = true,   -- alert when a quest turned in by the partner is still in your log
 	acceptAlert = true,   -- alert when the priest has not taken a quest accepted by the hunter
 	lootAlert   = true,   -- alert when a quest item looted by the partner was not looted here (PartnerQuests.lua)
@@ -45,6 +46,9 @@ local defaults = {
 	minimap     = true,   -- minimap button that opens the options panel (Options.lua)
 	minimapAngle = 200,   -- its position around the minimap (degrees)
 	tracking    = false, -- experimental live gathering tooltip scan / partner minimap pins (PartnerTracking.lua)
+	dungeon     = false,  -- dungeon mode: the assists take the tank's target (Dungeon.lua)
+	tank        = nil,    -- tank name for the dungeon mode (nil = the group member with the Tank role)
+	meleeLight  = true,   -- warrior range / facing light on the partner's screen (MeleeLight.lua)
 }
 
 local DB
@@ -105,7 +109,7 @@ local function PartnerUnit()
 	if not IsInGroup() then return nil end
 	for i = 1, 4 do
 		local u = "party" .. i
-		if UnitExists(u) then
+		if Val(UnitExists(u)) then
 			if not DB.partner or IsPartnerName(UnitName(u)) then
 				return u, i
 			end
@@ -284,7 +288,7 @@ local function Check()
 			Alert("hp", ("%s : %d%% PV !"):format(pname, hp), SOUND_WARN, 4)
 		end
 		local pet = "partypet" .. idx
-		if UnitExists(pet) and not Val(UnitIsDead(pet)) then
+		if Val(UnitExists(pet)) and not Val(UnitIsDead(pet)) then
 			local php = Pct(UnitHealth(pet), UnitHealthMax(pet))
 			if php and php < DB.hpPet then
 				Alert("pet", ("Familier : %d%% PV !"):format(php), SOUND_WARN, 5)
@@ -377,14 +381,14 @@ local function WorldPos(unit)
 end
 
 local function ComputeFacing()
-	if not UnitExists("target") or not UnitCanAttack("player", "target") or Val(UnitIsDead("target")) then return "N" end
+	if not Val(UnitExists("target")) or not Val(UnitCanAttack("player", "target")) or Val(UnitIsDead("target")) then return "N" end
 	local unit, idx = PartnerUnit()
 	if not unit then return "N" end
 	local okF, facing = pcall(GetPlayerFacing or function() end)
 	facing = okF and Val(facing) or nil
 	if not facing then return "UF" end
 
-	local sameTarget = UnitIsUnit(unit .. "target", "target")
+	local sameTarget = Val(UnitIsUnit(unit .. "target", "target"))
 	local hunterFresh = hunterFacing and GetTime() - hunterFacingTime < 2
 	local rel, approx
 
@@ -393,7 +397,7 @@ local function ComputeFacing()
 	if px then
 		local tx, ty
 		local pet = "partypet" .. idx
-		if UnitExists(pet) and UnitIsUnit(pet .. "target", "target") then
+		if Val(UnitExists(pet)) and Val(UnitIsUnit(pet .. "target", "target")) then
 			tx, ty = WorldPos(pet)
 		end
 		if not tx and hunterFresh and sameTarget then
@@ -440,8 +444,8 @@ local function FacingDebug(silent)
 		return tostring(v)
 	end
 	local unit, idx = PartnerUnit()
-	add(("%s  role=%s  partenaire=%s  combat=%s"):format(date("%H:%M:%S"), Role(), tostring(unit), tostring(UnitAffectingCombat("player"))))
-	add("cible ennemie=" .. tostring(UnitExists("target") and UnitCanAttack("player", "target")))
+	add(("%s  role=%s  partenaire=%s  combat=%s"):format(date("%H:%M:%S"), Role(), tostring(unit), show(UnitAffectingCombat("player"))))
+	add("cible ennemie=" .. show(Val(UnitExists("target")) and UnitCanAttack("player", "target")))
 	if GetPlayerFacing then
 		local ok, v = pcall(GetPlayerFacing)
 		add("GetPlayerFacing=" .. (ok and show(v) or ("ERREUR " .. tostring(v))))
@@ -492,7 +496,7 @@ end
 local function FacingTickHunter()
 	if not moveMode and GetTime() - lastFCRecv > 3 then facingFrame:Hide() end
 	if not DB.facing or not PartnerUnit() or not IsLeader() then return end
-	if not (UnitAffectingCombat("player") or (UnitExists("target") and UnitCanAttack("player", "target"))) then return end
+	if not (Val(UnitAffectingCombat("player")) or (Val(UnitExists("target")) and Val(UnitCanAttack("player", "target")))) then return end
 	local okF, f = pcall(GetPlayerFacing or function() end)
 	f = okF and Val(f) or nil
 	if not f then return end
@@ -668,7 +672,7 @@ local function ToggleMoveMode()
 		cast:Show()
 		facingFrame.text:SetText("|cffff4040<<<  Pretre : GAUCHE 90°|r")
 		facingFrame:Show()
-		Print("mode deplacement : glisse la barre de cast et le texte d'orientation, coin bas-droit de la barre pour la redimensionner. |cffffd040/duo move|r pour terminer.")
+		Print("mode deplacement : glisse la barre de cast, le texte d'orientation et le voyant du guerrier, coin bas-droit de la barre pour la redimensionner. |cffffd040/duo move|r pour terminer.")
 	else
 		cast:Hide()
 		facingFrame:Hide()
@@ -748,6 +752,8 @@ for _, g in ipairs({ "SPELL_FAILED_ONLY_SHAPESHIFT" }) do
 end
 
 local function IsRelayedError(msg)
+	-- expected failures of a warrior Rotation press (Rotation.lua): not relayed
+	if ns.IsRotationError and ns.IsRotationError(msg) then return false end
 	if RELAYED_ERRORS[msg] then return true end
 	for _, p in ipairs(RELAYED_PATTERNS) do
 		if msg:find(p) then return true end
@@ -769,11 +775,12 @@ local function PriestHasAggro()
 	if threat and threat >= 2 then return true end
 	for i = 1, 40 do
 		local np = "nameplate" .. i
-		if UnitExists(np) and UnitCanAttack("player", np) and UnitIsUnit(np .. "target", "player") then
+		-- In instances these are secret for addons (testing one raises an error): Val() skips them
+		if Val(UnitExists(np)) and Val(UnitCanAttack("player", np)) and Val(UnitIsUnit(np .. "target", "player")) then
 			return true
 		end
 	end
-	return UnitAffectingCombat("player") and GetTime() - lastHitTime < 2
+	return Val(UnitAffectingCombat("player")) and GetTime() - lastHitTime < 2
 end
 
 local function AggroTickPriest()
@@ -1050,10 +1057,10 @@ local function ArmNpc()
 	npcArmedUntil = GetTime() + NPC_ARM_SECONDS
 	npcOpened = false
 	local name = Val(UnitName("target")) or "le PNJ"
-	if not UnitExists("target") then
+	if not Val(UnitExists("target")) then
 		Print("Parler : le partenaire ne cible rien (il doit cibler le PNJ).")
 		return
-	elseif UnitIsPlayer("target") or UnitCanAttack("player", "target") then
+	elseif Val(UnitIsPlayer("target")) or Val(UnitCanAttack("player", "target")) then
 		Print(("Parler : la cible |cffffd040%s|r n'est pas un PNJ amical."):format(name))
 		return
 	end
@@ -1106,10 +1113,14 @@ local STOP_FOLLOW = "/follow player\n"
 
 local function MacroList()
 	local _, class = UnitClass("player")
-	-- In a duo the partner is always party1 (a name with a space would break macros)
-	local T = "party1"
+	-- Unit tokens, not names (a name with a space would break macros). T = the partner (party1 in a
+	-- duo, not always in a group of 5), A = whose target the attacks assist (the tank in dungeon
+	-- mode). UpdateBar rewrites the macros when these units change.
+	local partner, idx = PartnerUnit()
+	local T = partner or "party1"
+	local A = ns.AssistUnit()
 	-- [mod:shift] = partner's pet, [mod:ctrl] = yourself, otherwise = partner
-	local tgt = ("[mod:shift,@partypet1,help,nodead][mod:ctrl,@player][@%s,help,nodead]"):format(T)
+	local tgt = ("[mod:shift,@partypet%d,help,nodead][mod:ctrl,@player][@%s,help,nodead]"):format(idx or 1, T)
 	local function onTarget(spell, stopFollow)
 		return ("#showtooltip %s\n%s/cast %s %s"):format(spell, stopFollow and STOP_FOLLOW or "", tgt, spell)
 	end
@@ -1120,10 +1131,10 @@ local function MacroList()
 			{ "D-Wait",    "/follow player" }, -- following yourself = stop following
 			-- Talk to the partner's target (NPC) and accept / turn in its quests
 			{ "D-Talk",    ("#showtooltip\n/assist %s\n/duo npc\n/interact"):format(T) },
-			{ "D-Smite",   ("#showtooltip Smite\n/assist %s\n/cast [harm,nodead] Smite"):format(T) },
-			{ "D-SmiteW",  ("#showtooltip Smite\n/assist %s\n%s/cast [harm,nodead] Smite"):format(T, STOP_FOLLOW) },
-			{ "D-SWP",     ("#showtooltip Shadow Word: Pain\n/assist %s\n/cast [harm,nodead] Shadow Word: Pain"):format(T) },
-			{ "D-Wand",    ("#showtooltip Shoot\n/assist %s\n/cast [harm,nodead] Shoot"):format(T) },
+			{ "D-Smite",   ("#showtooltip Smite\n/assist %s\n/cast [harm,nodead] Smite"):format(A) },
+			{ "D-SmiteW",  ("#showtooltip Smite\n/assist %s\n%s/cast [harm,nodead] Smite"):format(A, STOP_FOLLOW) },
+			{ "D-SWP",     ("#showtooltip Shadow Word: Pain\n/assist %s\n/cast [harm,nodead] Shadow Word: Pain"):format(A) },
+			{ "D-Wand",    ("#showtooltip Shoot\n/assist %s\n/cast [harm,nodead] Shoot"):format(A) },
 			{ "D-LHeal",   onTarget("Lesser Heal", true) },
 			{ "D-Heal",    onTarget("Heal", true) },
 			{ "D-Flash",   onTarget("Flash Heal", true) },
@@ -1142,17 +1153,19 @@ local function MacroList()
 			{ "D-PetFollow","#showtooltip\n/petfollow" },
 			{ "D-PetPassif","#showtooltip\n/petpassive\n/petfollow" },
 			{ "D-FD",      "#showtooltip Feign Death\n/petfollow\n/cast Feign Death" },
-			{ "D-Assist",  ("#showtooltip\n/assist %s\n/petattack"):format(T) },
+			{ "D-Assist",  ("#showtooltip\n/assist %s\n/petattack"):format(A) },
 			{ "D-Talk",    ("#showtooltip\n/assist %s\n/duo npc\n/interact"):format(T) },
 			-- When the hunter follows the priest (/duo lead heal)
 			{ "D-Follow",  ("/follow %s"):format(T) },
 			{ "D-Wait",    "/follow player" },
 			-- Auto Shot does not fire while moving: stop following first
-			{ "D-Shoot",   ("#showtooltip Auto Shot\n/assist %s\n%s/petattack\n/cast [harm,nodead] !Auto Shot"):format(T, STOP_FOLLOW) },
-			{ "D-Serpent", ("#showtooltip Serpent Sting\n/assist %s\n/petattack\n/cast [harm,nodead] Serpent Sting"):format(T) },
-			{ "D-Arcane",  ("#showtooltip Arcane Shot\n/assist %s\n/petattack\n/cast [harm,nodead] Arcane Shot"):format(T) },
-			{ "D-Raptor",  ("#showtooltip Raptor Strike\n/assist %s\n/petattack\n/startattack\n/cast [harm,nodead] Raptor Strike"):format(T) },
-			{ "D-Melee",   ("#showtooltip Attack\n/assist %s\n/petattack\n/startattack"):format(T) },
+			{ "D-Shoot",   ("#showtooltip Auto Shot\n/assist %s\n%s/petattack\n/cast [harm,nodead] !Auto Shot"):format(A, STOP_FOLLOW) },
+			{ "D-Serpent", ("#showtooltip Serpent Sting\n/assist %s\n/petattack\n/cast [harm,nodead] Serpent Sting"):format(A) },
+			-- Same as the Arcane button: Serpent Sting on a new target, then Arcane Shot x3
+			{ "D-Arcane",  ("#showtooltip\n/assist %s\n%s/petattack\n/castsequence [harm,nodead] reset=target/combat Serpent Sting, Arcane Shot, Arcane Shot, Arcane Shot"):format(A, STOP_FOLLOW) },
+			{ "D-Concussive", ("#showtooltip Concussive Shot\n/assist %s\n%s/petattack\n/cast [harm,nodead] Concussive Shot"):format(A, STOP_FOLLOW) },
+			{ "D-Raptor",  ("#showtooltip Raptor Strike\n/assist %s\n/petattack\n/startattack\n/cast [harm,nodead] Raptor Strike"):format(A) },
+			{ "D-Melee",   ("#showtooltip Attack\n/assist %s\n/petattack\n/startattack"):format(A) },
 		}
 		if DB.partner then
 			table.insert(list, { "D-Invite", ("/invite %s"):format(DB.partner) })
@@ -1161,7 +1174,7 @@ local function MacroList()
 	elseif class == "WARRIOR" then
 		-- Keep your own live enemy target, otherwise take the partner's (works leading or following).
 		-- Melee attacks stop following: the follow would drag the warrior away from its target.
-		local ASSIST = ("/assist [noharm][dead] %s\n"):format(T)
+		local ASSIST = ("/assist [noharm][dead] %s\n"):format(A)
 		local function melee(spell, cast)
 			return ("#showtooltip %s\n%s%s/startattack\n/cast %s"):format(spell, ASSIST, STOP_FOLLOW, cast or ("[harm,nodead] " .. spell))
 		end
@@ -1169,8 +1182,14 @@ local function MacroList()
 			{ "D-Follow",  ("/follow %s"):format(T) },
 			{ "D-Wait",    "/follow player" },
 			{ "D-Talk",    ("#showtooltip\n/assist %s\n/duo npc\n/interact"):format(T) },
-			-- 1st press switches to Battle Stance if needed (out of combat only), 2nd press charges
-			{ "D-Charge",  ("#showtooltip Charge\n%s%s/cast [nostance:1,nocombat,harm,nodead] Battle Stance; [harm,nodead] Charge"):format(ASSIST, STOP_FOLLOW) },
+			-- 1st press switches to Battle Stance if needed (out of combat only), 2nd press charges.
+			-- Charge is not usable in combat: there it switches to the partner's live enemy target instead.
+			{ "D-Charge",  ("#showtooltip Charge\n/target [combat,@%starget,harm,nodead]\n%s%s/cast [nostance:1,nocombat,harm,nodead] Battle Stance; [harm,nodead] Charge"):format(A, ASSIST, STOP_FOLLOW) },
+			-- Same, but always takes the partner's target (even with your own enemy target) and attacks it.
+			-- No /interact in combat: it can go to the mob already in front of you instead of the new target.
+			-- Heroic Strike on the next press, once, only after a Charge that succeeded: /castsequence
+			-- advances on a successful cast only (Charge rage arrives on impact, too late for the same press).
+			{ "D-ChargeP", ("#showtooltip Charge\n/assist %s\n/startattack\n/cast [nostance:1,nocombat,harm,nodead] Battle Stance\n/castsequence [stance:1,harm,nodead] reset=combat Charge, Heroic Strike\n/stopmacro [combat]\n/interact"):format(A) },
 			-- /interact walks to the target with Click-to-Move (like D-Talk); nothing without an enemy target
 			{ "D-Melee",   ("#showtooltip Attack\n%s/stopmacro [noharm][dead]\n%s/startattack\n/interact"):format(ASSIST, STOP_FOLLOW) },
 			{ "D-Strike",  melee("Heroic Strike") },
@@ -1182,6 +1201,8 @@ local function MacroList()
 			{ "D-Execute", melee("Execute") },
 			-- 1st press switches to Defensive Stance if needed, 2nd press taunts
 			{ "D-Taunt",   melee("Taunt", "[nostance:2,harm,nodead] Defensive Stance; [harm,nodead] Taunt") },
+			-- Same as the Kick button; the tooltip follows the spell the conditions pick
+			{ "D-Kick",    melee("", "[stance:3,harm,nodead] Pummel; [noequipped:Shields,harm,nodead] Pummel; [harm,nodead] Shield Bash") },
 		}
 		if DB.partner then
 			table.insert(list, { "D-Invite", ("/invite %s"):format(DB.partner) })
@@ -1190,9 +1211,17 @@ local function MacroList()
 	end
 end
 
-local function CreateMacros()
-	if InCombatLockdown() then Print("impossible en combat."); return end
+-- quiet = true: the units changed (UpdateBar): rewrite the macros that exist, create none, no chat
+local function CreateMacros(quiet)
+	if InCombatLockdown() then if not quiet then Print("impossible en combat.") end return end
 	local list = MacroList()
+	if quiet then
+		for _, m in ipairs(list or {}) do
+			local idx = GetMacroIndexByName(m[1])
+			if idx and idx > 0 then EditMacro(idx, m[1], 134400, m[2]) end
+		end
+		return
+	end
 	if not list then Print("pas de macros predefinies pour cette classe."); return end
 	if not DB.partner then
 		Print("|cffffd040Attention|r : aucun partenaire defini, les macros ciblent 'party1'. Fais /duo partner <Nom> puis relance /duo macros.")
@@ -1308,16 +1337,7 @@ local function MakeButton(key, label, icon, secure, row)
 	return b
 end
 
-local function SpellNameIcon(id)
-	if C_Spell and C_Spell.GetSpellInfo then
-		local info = C_Spell.GetSpellInfo(id)
-		if info then return info.name, info.iconID end
-	end
-	if GetSpellInfo then
-		local name, _, icon = GetSpellInfo(id)
-		return name, icon
-	end
-end
+local SpellNameIcon = ns.SpellNameIcon -- Spellbook.lua
 
 -- Follow toggle (not protected): follows the partner, or stops following if already
 -- following (following yourself = /follow player). State from AUTOFOLLOW_BEGIN/END.
@@ -1409,13 +1429,13 @@ local DRINKS = {
 }
 
 -- Hunter shots (second row when the hunter follows the priest)
-local HUNTER_SPELL = { AutoShot = 75, SerpentSting = 1978, ArcaneShot = 3044, RaptorStrike = 2973, Attack = 6603 }
+local HUNTER_SPELL = { AutoShot = 75, SerpentSting = 1978, ArcaneShot = 3044, ConcussiveShot = 5116, RaptorStrike = 2973, Attack = 6603 }
 
 -- Warrior attacks (second row)
 local WARRIOR_SPELL = {
 	BattleShout = 6673, Charge = 100, Attack = 6603, HeroicStrike = 78, Rend = 772, Sunder = 7386,
 	ThunderClap = 6343, Hamstring = 1715, Overpower = 7384, Execute = 5308, Taunt = 355,
-	BattleStance = 2457, DefensiveStance = 71,
+	BattleStance = 2457, DefensiveStance = 71, ShieldBash = 72, Pummel = 6552,
 }
 
 -- Virtual mouse buttons sent by the Ctrl/Shift+key override bindings: the target then
@@ -1429,7 +1449,10 @@ local assistButtons = {} -- "assist the partner + spell" buttons, priest, hunter
 -- opts.stopFollow: stop following first (cast time, Auto Shot), opts.pre: macro lines
 -- before the cast, opts.repeating: "!" so Auto Shot is not toggled off when already on,
 -- opts.keepTarget: assist only without a live enemy target (warrior, often the leader),
--- opts.castPre: "/cast" options tried before the spell (warrior stance swap).
+-- opts.combatTarget: in combat, take the partner's live enemy target even with keepTarget,
+-- opts.castPre: "/cast" options tried before the spell (warrior stance swap),
+-- opts.sequence: spell IDs cast with /castsequence instead of the spell (restarts on a new
+-- target or out of combat).
 local function AssistButton(key, spellID, opts)
 	opts = opts or {}
 	local name, icon = SpellNameIcon(spellID)
@@ -1440,7 +1463,16 @@ local function AssistButton(key, spellID, opts)
 	b.pre = opts.pre or ""
 	b.bang = opts.repeating and "!" or ""
 	b.assist = opts.keepTarget and "[noharm][dead] " or ""
+	b.combatTarget = opts.combatTarget
 	b.castPre = opts.castPre or ""
+	if opts.sequence then
+		local names = {}
+		for i, id in ipairs(opts.sequence) do
+			names[i] = SpellNameIcon(id)
+			if not names[i] then names = nil; break end
+		end
+		b.sequence = names and ("reset=target/combat " .. table.concat(names, ", "))
+	end
 	b.hint = "Prend la cible du partenaire puis lance le sort" .. (opts.stopFollow and "\nArrete le follow avant l'incantation" or "")
 	b.noDesat = true
 	assistButtons[#assistButtons + 1] = b
@@ -1450,8 +1482,11 @@ end
 local function UpdateAssistButtons(unit)
 	for _, b in ipairs(assistButtons) do
 		if b.spellName then
-			b:SetAttribute("macrotext", ("/assist %s%s\n%s%s/cast %s[harm,nodead] %s%s")
-				:format(b.assist, unit, b.stopFollow and STOP_FOLLOW or "", b.pre, b.castPre, b.bang, b.spellName))
+			local cast = b.sequence and ("/castsequence [harm,nodead] " .. b.sequence)
+				or ("/cast %s[harm,nodead] %s%s"):format(b.castPre, b.bang, b.spellName)
+			local switch = b.combatTarget and ("/target [combat,@%starget,harm,nodead]\n"):format(unit) or ""
+			b:SetAttribute("macrotext", ("%s/assist %s%s\n%s%s%s")
+				:format(switch, b.assist, unit, b.stopFollow and STOP_FOLLOW or "", b.pre, cast))
 		end
 	end
 end
@@ -1475,10 +1510,7 @@ local function ItemIcon(id)
 	return GetItemIcon and GetItemIcon(id)
 end
 
-local function Known(id)
-	if IsPlayerSpell then return IsPlayerSpell(id) end
-	return IsSpellKnown and IsSpellKnown(id)
-end
+local Known = ns.Known -- Spellbook.lua: any rank counts (Heal rank 2 replaces rank 1 on WoW Forever)
 
 local function BestDrink()
 	local level = UnitLevel("player")
@@ -1591,7 +1623,16 @@ local function BuildHunterButtons()
 	local shoot = AssistButton("Shoot", HUNTER_SPELL.AutoShot, { stopFollow = true, pre = PET, repeating = true })
 	shoot.hint = "Prend la cible du partenaire, arrete le follow (Tir auto ne part pas en mouvement), familier a l'attaque"
 	AssistButton("Serpent", HUNTER_SPELL.SerpentSting, { pre = PET }) -- instant: keeps following
-	AssistButton("Arcane", HUNTER_SPELL.ArcaneShot, { pre = PET })
+	-- Serpent Sting on a new target, then Arcane Shot: the 3rd Arcane Shot (~18 s) loops back to
+	-- Serpent Sting (15 s). Always takes the partner's target, so it follows the priest's target
+	-- switches in combat. Stops following so Auto Shot keeps firing.
+	local arcane = AssistButton("Arcane", HUNTER_SPELL.ArcaneShot, { stopFollow = true, pre = PET,
+		sequence = { HUNTER_SPELL.SerpentSting, HUNTER_SPELL.ArcaneShot, HUNTER_SPELL.ArcaneShot, HUNTER_SPELL.ArcaneShot } })
+	arcane.label = "Serpent + Arcane"
+	arcane.hint = "Prend la cible du partenaire, arrete le follow, familier a l'attaque"
+		.. "\nMorsure de serpent sur une nouvelle cible, puis Tir des arcanes (Morsure relancee apres 3 Tirs)"
+	local slow = AssistButton("Concussive", HUNTER_SPELL.ConcussiveShot, { stopFollow = true, pre = PET })
+	slow.hint = "Prend la cible du partenaire, arrete le follow, familier a l'attaque, Trait de choc (ralentit)"
 	AssistButton("Raptor", HUNTER_SPELL.RaptorStrike, { pre = PET .. "/startattack\n" })
 	-- "!Attack" so an attack already running is not toggled off
 	local melee = AssistButton("Melee", HUNTER_SPELL.Attack, { pre = PET .. "/startattack\n", repeating = true })
@@ -1624,15 +1665,33 @@ local function BuildWarriorButtons()
 	shout.noDesat = true
 	shout.hint = "Toi et le groupe, garde le follow"
 
-	-- Charge: out of combat only, in Battle Stance (1st press swaps stance if needed, 2nd press charges)
+	-- Charge: out of combat only, in Battle Stance (1st press swaps stance if needed, 2nd press charges).
+	-- In combat it switches to the partner's live enemy target instead.
 	local battle = SpellNameIcon(WARRIOR_SPELL.BattleStance) or "Battle Stance"
-	attack("Charge", WARRIOR_SPELL.Charge, { pre = "", castPre = ("[nostance:1,nocombat,harm,nodead] %s; "):format(battle) }).hint =
+	attack("Charge", WARRIOR_SPELL.Charge, { pre = "", combatTarget = true, castPre = ("[nostance:1,nocombat,harm,nodead] %s; "):format(battle) }).hint =
 		TARGET_HINT .. "\nArrete le follow, passe en posture de combat si besoin (1er appui, hors combat) puis charge"
+		.. "\nEn combat : prend la cible ennemie du partenaire"
 
 	-- Melee: with Click-to-Move, /interact walks to the target (like the Talk button); nothing without an enemy target
 	local melee = AssistButton("Melee", WARRIOR_SPELL.Attack, { keepTarget = true, repeating = true,
 		pre = "/stopmacro [noharm][dead]\n" .. STOP_FOLLOW .. "/startattack\n/interact\n" })
 	melee.hint = TARGET_HINT .. ", arrete le follow et attaque au corps a corps\nAvec le Click-to-Move, marche jusqu'a la cible"
+
+	-- One-button rotation: its spells and macro are managed by Rotation.lua (/duo rotation)
+	local _, strikeIcon = SpellNameIcon(WARRIOR_SPELL.HeroicStrike)
+	local rot = MakeButton("Rotation", "Rotation", strikeIcon or "Interface\\Icons\\Ability_Rogue_Ambush", true, 2)
+	rot:SetAttribute("type", "macro")
+	rot.noDesat = true
+	rot.hint = TARGET_HINT .. "\nArrete le follow, attaque auto, puis le premier sort utilisable de la liste"
+	-- Multi-target mode until the end of the fight (key or voice "multi"): Blizzard's secure
+	-- "attribute" action writes the Rotation macro, in combat too (values set by Rotation.lua)
+	local _, clapIcon = SpellNameIcon(WARRIOR_SPELL.ThunderClap)
+	local multi = MakeButton("Multi", "Multi-cibles", clapIcon or "Interface\\Icons\\Spell_Nature_ThunderClap", true, 2)
+	multi:SetAttribute("type", "attribute")
+	multi.noDesat = true
+	multi.hint = "Passe le bouton Rotation en multi-cibles jusqu'a la fin du combat, ou du prochain s'il est appuye "
+		.. "hors combat (ne lance rien)"
+	ns.SetupRotation(rot, multi)
 
 	attack("Strike", WARRIOR_SPELL.HeroicStrike)
 	attack("Rend", WARRIOR_SPELL.Rend)
@@ -1646,6 +1705,17 @@ local function BuildWarriorButtons()
 	local defensive = SpellNameIcon(WARRIOR_SPELL.DefensiveStance) or "Defensive Stance"
 	attack("Taunt", WARRIOR_SPELL.Taunt, { castPre = ("[nostance:2,harm,nodead] %s; "):format(defensive) }).hint =
 		TARGET_HINT .. "\nArrete le follow, passe en posture defensive si besoin (1er appui) puis provoque"
+
+	-- Kick: Shield Bash needs a shield and Battle or Defensive Stance; Pummel needs Berserker Stance
+	-- (no shield needed). So Pummel in Berserker Stance or without a shield, Shield Bash otherwise.
+	local pummel = SpellNameIcon(WARRIOR_SPELL.Pummel) or "Pummel"
+	local shields = C_Item and C_Item.GetItemSubClassInfo and C_Item.GetItemSubClassInfo(4, 6) or "Shields" -- Armor, Shield
+	local kick = attack("Kick", WARRIOR_SPELL.ShieldBash,
+		{ castPre = ("[stance:3,harm,nodead] %s; [noequipped:%s,harm,nodead] %s; "):format(pummel, shields, pummel) })
+	kick.label = "Kick (interruption)"
+	kick.hint = TARGET_HINT .. "\nArrete le follow, attaque auto"
+		.. "\nAvec un bouclier : Coup de bouclier (posture de combat ou defensive)"
+		.. "\nSans bouclier, ou en posture berserker : Volee de coups (posture berserker seulement)"
 
 	WaitButton()
 end
@@ -1695,15 +1765,15 @@ local function GetBuff(unit, i)
 	return true, name, expires
 end
 
--- Seconds left on Fortitude: 0 = missing, nil = unreadable
-local function FortRemaining(unit)
+-- Seconds left on a buff (names: set of its names): 0 = missing, nil = unreadable
+local function BuffRemaining(unit, names)
 	for i = 1, 40 do
 		local ok, name, expires = GetBuff(unit, i)
 		if not ok then return nil end
 		if name == nil then return 0 end
 		name, expires = Val(name), Val(expires)
 		if not name then return nil end
-		if fortNames[name] then
+		if names[name] then
 			if not expires or expires == 0 then return math.huge end
 			return expires - GetTime()
 		end
@@ -1723,8 +1793,8 @@ local function CheckFort()
 	end
 	local any = false
 	for u, label in pairs(units) do
-		if UnitExists(u) and not Val(UnitIsDeadOrGhost(u)) then
-			local left = FortRemaining(u)
+		if Val(UnitExists(u)) and not Val(UnitIsDeadOrGhost(u)) then
+			local left = BuffRemaining(u, fortNames)
 			if left and left < 120 then fortNeed[label] = true; any = true end
 		end
 	end
@@ -1745,8 +1815,9 @@ local function UpdateBar()
 	barPending = false
 	local unit, idx = PartnerUnit()
 	unit = unit or "party1"
+	local assist = ns.AssistUnit() -- the partner, or the tank in dungeon mode (Dungeon.lua)
 	btnTarget:SetAttribute("unit", unit)
-	btnAssist:SetAttribute("macrotext", "/assist " .. unit)
+	btnAssist:SetAttribute("macrotext", "/assist " .. assist)
 	btnTalk:SetAttribute("macrotext", ("/assist %s\n/duo npc\n/interact"):format(unit))
 	if btnFort then
 		btnFort:SetAttribute("unit", unit)
@@ -1754,7 +1825,14 @@ local function UpdateBar()
 		btnFort:SetAttribute("*unit-" .. VBTN_PET, "partypet" .. (idx or 1))
 		UpdatePriestSpells(unit, "partypet" .. (idx or 1))
 	end
-	UpdateAssistButtons(unit)
+	UpdateAssistButtons(assist)
+	if ns.UpdateRotation then ns.UpdateRotation() end
+	-- The D- macros name units: rewrite them when these units change (group of 5, dungeon mode)
+	local units = ("%s %d %s"):format(unit, idx or 1, assist)
+	if DB.macroUnits ~= units then
+		DB.macroUnits = units
+		CreateMacros(true)
+	end
 	bar:SetScale(DB.barScale)
 	bar:SetShown(DB.bar)
 end
@@ -1969,13 +2047,17 @@ for key, label in pairs({
 	SWP = "Mot de l'ombre : Douleur + assist (pretre)",
 	Wand = "Baguette + assist (pretre)", Wait = "Wait / stop follow", Drink = "Boire (pretre)",
 	Shoot = "Tir auto + assist + stop follow (chasseur)", Serpent = "Morsure de serpent + assist (chasseur)",
-	Arcane = "Tir des arcanes + assist (chasseur)", Raptor = "Attaque du raptor + assist (chasseur)",
+	Arcane = "Morsure de serpent puis Tir des arcanes + assist + stop follow (chasseur)", Raptor = "Attaque du raptor + assist (chasseur)",
+	Concussive = "Trait de choc + assist + stop follow (chasseur)",
 	Melee = "Attaque corps a corps + assist (chasseur, guerrier)",
 	Shout = "Cri de guerre (guerrier)", Charge = "Charge + assist + stop follow (guerrier)",
+	Rotation = "Rotation : premier sort utilisable de la liste + assist (guerrier, /duo rotation)",
+	Multi = "Rotation en multi-cibles jusqu'a la fin du combat (guerrier)",
 	Strike = "Frappe heroique + assist (guerrier)", Rend = "Pourfendre + assist (guerrier)",
 	Sunder = "Fracasser armure + assist (guerrier)", Clap = "Coup de tonnerre + assist (guerrier)",
 	Hamstring = "Brise-genou + assist (guerrier)", Overpower = "Fulgurance + assist (guerrier)",
 	Execute = "Execution + assist (guerrier)", Taunt = "Provocation + assist (guerrier)",
+	Kick = "Kick : Coup de bouclier / Volee de coups + assist (guerrier)",
 }) do
 	_G["BINDING_NAME_CLICK DuoBoxBtn" .. key .. ":LeftButton"] = label
 end
@@ -1991,6 +2073,11 @@ ns.SendComm = SendComm
 ns.FromPartner = FromPartner
 ns.PartnerUnit = PartnerUnit
 ns.GetDB = function() return DB end
+-- Rotation.lua, Dungeon.lua
+ns.UpdateBar = UpdateBar
+ns.BuffRemaining = BuffRemaining
+ns.BarUnit = BarUnit
+ns.STOP_FOLLOW = STOP_FOLLOW
 
 --------------------------------------------------------------------------------
 -- Events
@@ -2251,6 +2338,9 @@ local function Set(key, value)
 	elseif key == "leader" then
 		SendComm("LD:" .. (value or "auto")) -- the partner follows the same setting
 		Check()
+	elseif key == "dungeon" or key == "tank" then
+		UpdateBar() -- assists and D- macros (after the fight if in combat)
+		if InCombatLockdown() then Print("sera applique a la sortie du combat.") end
 	elseif key == "bar" or key == "barScale" or key == "partner" then
 		UpdateBar()
 		if key == "bar" and InCombatLockdown() then Print("sera applique a la sortie du combat.") end
@@ -2258,11 +2348,14 @@ local function Set(key, value)
 		if not value then facingFrame:Hide() end
 	elseif key == "combatMonitor" then
 		UpdateCombatSignal()
+	elseif key == "interactEnemy" then
+		if ns.RefreshInteract then ns.RefreshInteract() end
 	elseif key == "rxp" or key == "rxpHold" then
 		if ns.RefreshRXP then ns.RefreshRXP() end
 	elseif key == "minimap" or key == "minimapAngle" then
 		if ns.UpdateMinimapButton then ns.UpdateMinimapButton() end
 	end
+	if key == "meleeLight" and ns.RefreshMeleeLight then ns.RefreshMeleeLight() end
 	if (key == "tracking" or key == "partner") and ns.RefreshTracking then
 		ns.RefreshTracking()
 	end
@@ -2283,7 +2376,7 @@ local function OnOff(key, arg)
 	Print(("%s = %s"):format(key, DB[key] and "|cff40ff40on|r" or "|cffff4040off|r"))
 end
 
-local toggles = { sound = "sound", flash = "flash", invite = "autoInvite", quest = "autoQuest", share = "autoShare", rez = "autoRez", frame = "frame", bar = "bar", castbar = "castbar", autonpc = "autoNpc", turnin = "turnin", accept = "acceptAlert", loot = "lootAlert", minimap = "minimap" }
+local toggles = { sound = "sound", flash = "flash", invite = "autoInvite", quest = "autoQuest", share = "autoShare", rez = "autoRez", frame = "frame", bar = "bar", castbar = "castbar", autonpc = "autoNpc", turnin = "turnin", accept = "acceptAlert", loot = "lootAlert", minimap = "minimap", light = "meleeLight" }
 
 local function Command(input)
 	local cmd, arg = (input or ""):match("^%s*(%S*)%s*(.-)%s*$")
@@ -2342,11 +2435,21 @@ local function Command(input)
 		ns.RXPCommand(arg)
 	elseif cmd == "tracking" then
 		ns.TrackingCommand(arg:lower())
+	elseif cmd == "interact" then
+		if ns.InteractCommand then
+			ns.InteractCommand(arg:lower())
+		else -- e.g. InteractPriority.lua added to the .toc while the game was running
+			Print("InteractPriority.lua n'est pas charge : redemarre completement le jeu.")
+		end
 	elseif cmd == "npc" then
 		-- called by the D-Talk macro / Talk button: arm NPC quest handling for a short time
 		ArmNpc()
 	elseif cmd == "keys" then
 		ToggleKeys()
+	elseif cmd == "rotation" then
+		ns.ToggleRotation()
+	elseif cmd == "dungeon" or cmd == "donjon" or cmd == "tank" then
+		ns.DungeonCommand(cmd == "tank" and "tank" or "dungeon", cmd == "tank" and arg or arg:lower())
 	elseif cmd == "move" then
 		ToggleMoveMode()
 	elseif cmd == "macros" then
@@ -2378,11 +2481,16 @@ local function Command(input)
 		Print("  /duo bar [on|off]    - barre Follow / Cibler / Echange (Maj+glisser pour deplacer)")
 		Print("  /duo scale <0.5-2>   - taille de la barre (1 = normal)")
 		Print("  /duo keys            - raccourcis clavier des boutons de la barre")
+		Print("  /duo rotation        - sorts du bouton Rotation (guerrier ; aussi clic droit sur le bouton)")
+		Print("  /duo dungeon [on|off] - mode donjon : les assists prennent la cible du tank")
+		Print("  /duo tank <Nom>|auto - tank du mode donjon (auto : le membre au role Tank)")
 		Print("  /duo move            - deplacer / redimensionner la barre de cast et l'orientation")
 		Print("  /duo facing [on|off|invert|dist <m>] - indicateur d'orientation du pretre")
 		Print("  /duo rxp [on|off|hold [on|off]|sync] - objectifs du partenaire dans RestedXP")
 		Print("  /duo tracking [on|off|scan] - detections de metiers du partenaire (experimental, GatherLite)")
+		Print("  /duo interact [on|off] - touche d'interaction : la cible ennemie avant les objets / PNJ proches (seul : etat)")
 		Print("  /duo sound|flash|invite|quest|share|rez|frame|castbar|autonpc|turnin|accept|loot|minimap [on|off]")
+		Print("  /duo light [on|off]  - voyant vert / rouge du guerrier (portee, orientation) chez le partenaire")
 		Print("  /duo status")
 		Print("  /duo help            - cette aide")
 	end
