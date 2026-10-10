@@ -2074,6 +2074,7 @@ ns.SendComm = SendComm
 ns.FromPartner = FromPartner
 ns.PartnerUnit = PartnerUnit
 ns.GetDB = function() return DB end
+ns.DEFAULTS = defaults
 -- Rotation.lua, Dungeon.lua
 ns.UpdateBar = UpdateBar
 ns.BuffRemaining = BuffRemaining
@@ -2357,6 +2358,7 @@ local function Set(key, value)
 		if ns.UpdateMinimapButton then ns.UpdateMinimapButton() end
 	end
 	if key == "meleeLight" and ns.RefreshMeleeLight then ns.RefreshMeleeLight() end
+	if key == "rotation" and ns.RotationChanged then ns.RotationChanged() end -- loaded by a profile
 	if (key == "tracking" or key == "partner") and ns.RefreshTracking then
 		ns.RefreshTracking()
 	end
@@ -2453,6 +2455,8 @@ local function Command(input)
 		ns.ToggleRotation()
 	elseif cmd == "dungeon" or cmd == "donjon" or cmd == "tank" then
 		ns.DungeonCommand(cmd == "tank" and "tank" or "dungeon", cmd == "tank" and arg or arg:lower())
+	elseif cmd == "profile" or cmd == "profil" then
+		ns.ProfileCommand(arg)
 	elseif cmd == "move" then
 		ToggleMoveMode()
 	elseif cmd == "macros" then
@@ -2495,6 +2499,7 @@ local function Command(input)
 		Print("  /duo sound|flash|invite|quest|share|rez|frame|castbar|autonpc|turnin|accept|loot|minimap [on|off]")
 		Print("  /duo light [on|off|debug|reset] - voyant vert / rouge du guerrier chez le partenaire (/duo move : deplacer, coin : taille)")
 		Print("  /duo lightsound [on|off] - son optionnel quand le voyant reste rouge (desactive par defaut)")
+		Print("  /duo profile [save|load|delete <nom>] - profils de reglages, communs aux persos du compte (seul : la liste)")
 		Print("  /duo status")
 		Print("  /duo help            - cette aide")
 	end

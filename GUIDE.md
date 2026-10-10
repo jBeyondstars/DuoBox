@@ -49,7 +49,7 @@ Game options → Interface: **"Use Raid-Style Party Frames"** on the priest (lar
 Everything in this guide can be done from the **options panel**: type `/duo` or click the DuoBox minimap button
 (left click: panel, right click: key bindings, drag: move the button; `/duo minimap off` hides it). It is also listed in
 the game options under AddOns → DuoBox. Tabs: General (partner, role, actions such as macros, key bindings, alert test,
-CVars, move mode), Alerts (sound, flash, thresholds), Automation, Display, RestedXP. `/duo help` lists the equivalent commands.
+CVars, move mode), Alerts (sound, flash, thresholds), Automation, Display, RestedXP, Profiles. `/duo help` lists the equivalent commands.
 ```
 /duo partner PriestName      (on the hunter)
 /duo partner HunterName      (on the priest)
@@ -71,6 +71,20 @@ The setting is sent to the partner when it is in the group (otherwise type it on
 - the **priest facing indicator**, which only runs while the priest follows.
 
 Health, mana, pet and aggro alerts do not change: they depend on the role (heal / dps).
+
+### Configuration profiles
+A profile is a named copy of the settings, for example `Quetes` and `Donjon`, to switch between them in one click.
+Profils tab of the options panel: type a name, **Enregistrer**; each saved profile has **Charger** and **Supprimer**.
+- A profile holds every setting of the panel (alerts, thresholds, automation, display, RestedXP, leader, dungeon mode)
+  and the spells of the warrior's **Rotation** button. It does not hold the partner, the role, the tank or the frame
+  positions: they stay those of the character. A profile saved by a character without a Rotation list keeps the
+  Rotation of the character that loads it.
+- Profiles are saved per WoW account on this PC (`WTF/Account/<account>/SavedVariables/DuoBox.lua`): all characters of
+  the account see them, the characters of another account or of the other PC have their own.
+- Loading replaces the character's settings (out of combat). Later changes are not saved in the profile until you save
+  it again: the tab shows "modifie depuis" and the name field is filled with the active profile.
+- `/duo profile` lists them, `/duo profile save <name>` (alone: the active profile), `/duo profile load <name>`,
+  `/duo profile delete <name>`. Names ignore the case.
 
 ### Dungeon mode: assist the tank
 In a group with a tank, `/duo dungeon on` (or the Automation tab of the options panel), on both characters:

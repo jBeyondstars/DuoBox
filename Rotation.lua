@@ -202,6 +202,7 @@ local function Changed()
 	Check() -- out of combat: the macros now; in combat: after the fight
 	if panel and panel:IsShown() then RefreshPanel() end
 end
+ns.RotationChanged = Changed -- DB.rotation replaced by a profile (Profiles.lua)
 
 -- Spell from a spell ID, a spell link or a name from your spellbook
 function ns.RotationFind(text)

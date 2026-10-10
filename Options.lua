@@ -10,7 +10,8 @@ local _, ns = ...
 local function DB() return ns.GetDB() end
 local Print = ns.Print
 
-local WIDTH, HEIGHT = 500, 420
+local WIDTH, HEIGHT = 540, 420
+local TABS = 6
 local COL2 = 240 -- x of the second column, inside a page
 
 local panel = CreateFrame("Frame", "DuoBoxOptions", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
@@ -166,7 +167,7 @@ local function NewPage(label)
 	page:SetPoint("BOTTOMRIGHT", -22, 18)
 	page:Hide()
 	pages[i] = page
-	local tabW = (WIDTH - 44 - 4 * 4) / 5
+	local tabW = (WIDTH - 44 - 4 * (TABS - 1)) / TABS
 	local tab = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
 	tab:SetSize(tabW, 24)
 	tab:SetPoint("TOPLEFT", 22 + (i - 1) * (tabW + 4), -42)
@@ -441,6 +442,130 @@ Button(rxpPage, 0, -80, 200, "Resynchroniser", Run("rxp sync"), "Renvoie les jou
 local rxpState = Note(rxpPage, 0, -114, 450)
 
 --------------------------------------------------------------------------------
+-- Page 6: Profiles (Profiles.lua)
+--------------------------------------------------------------------------------
+
+local profPage = NewPage("Profils")
+
+StaticPopupDialogs.DUOBOX_CONFIRM = {
+	text = "%s", button1 = YES or "Oui", button2 = NO or "Non",
+	OnAccept = function(self, data)
+		local action = data or self.data
+		if action then action() end
+	end,
+	timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+}
+
+-- Runs the action, after a Yes in a popup when there is a question
+local function Confirm(question, action)
+	if not question then return action() end
+	StaticPopup_Show("DUOBOX_CONFIRM", question, nil, action)
+end
+
+Header(profPage, 0, 0, "Profils de reglages (communs aux persos de ce compte WoW)")
+local profState = Note(profPage, 0, -18, 490)
+
+local profEdit = CreateFrame("EditBox", nil, profPage, "InputBoxTemplate")
+profEdit:SetSize(180, 20)
+profEdit:SetPoint("TOPLEFT", 6, -42)
+profEdit:SetAutoFocus(false)
+profEdit:SetMaxLetters(32)
+
+local function SaveProfile()
+	local name = profEdit:GetText():match("^%s*(.-)%s*$")
+	profEdit:ClearFocus()
+	if name == "" then
+		Print("donne un nom au profil.")
+		return
+	end
+	local profile, key = ns.ProfileInfo(name)
+	Confirm(profile and key ~= ns.ActiveProfile() and ("Remplacer le profil %s par les reglages actuels ?"):format(key),
+		function() ns.Command("profile save " .. name) end)
+end
+
+profEdit:SetScript("OnEnterPressed", SaveProfile)
+profEdit:SetScript("OnEscapePressed", function(self) self:ClearFocus(); ns.RefreshOptions() end)
+profEdit.Refresh = function(self) if not self:HasFocus() then self:SetText(ns.ActiveProfile() or "") end end
+Tooltip(profEdit, "Nom du profil", "Par exemple Quetes ou Donjon. Prerempli avec le profil actif.")
+controls[#controls + 1] = profEdit
+Button(profPage, 196, -41, 120, "Enregistrer", SaveProfile,
+	"Enregistre les reglages actuels de ce perso sous ce nom. Un profil du meme nom est remplace.")
+
+Header(profPage, 0, -76, "Profils enregistres")
+local profMore = Note(profPage, 180, -78, 310)
+
+local function LoadProfile(name)
+	if InCombatLockdown() then
+		Print("un profil se charge hors combat.")
+		return
+	end
+	local active, changed = ns.ActiveProfile()
+	Confirm((not active or changed) and ("Charger le profil %s ?\nLes reglages actuels de ce perso, pas enregistres, seront remplaces.")
+		:format(name), function() ns.Command("profile load " .. name) end)
+end
+
+local ROWS, ROW_H = 7, 24
+local profRows, profOffset = {}, 0
+local profList = CreateFrame("Frame", nil, profPage)
+profList:SetPoint("TOPLEFT", 0, -94)
+profList:SetSize(490, ROWS * ROW_H)
+profList:EnableMouseWheel(true)
+
+for i = 1, ROWS do
+	local row = CreateFrame("Frame", nil, profList)
+	row:SetSize(490, ROW_H)
+	row:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
+	row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	row.name:SetPoint("LEFT", 4, 0)
+	row.name:SetWidth(170)
+	row.name:SetJustifyH("LEFT")
+	row.by = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	row.by:SetPoint("LEFT", 180, 0)
+	row.by:SetWidth(134)
+	row.by:SetJustifyH("LEFT")
+	Button(row, 318, -1, 82, "Charger", function() LoadProfile(row.profile) end,
+		"Remplace les reglages de ce perso par ceux du profil (hors combat).")
+	Button(row, 404, -1, 86, "Supprimer", function()
+		Confirm(("Supprimer le profil %s ?"):format(row.profile), function() ns.Command("profile delete " .. row.profile) end)
+	end, "Supprime le profil pour tous les persos de ce compte.")
+	profRows[i] = row
+end
+
+local function ClassColored(name, class)
+	local c = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+	if not c then return name end
+	return ("|cff%02x%02x%02x%s|r"):format(math.floor(c.r * 255), math.floor(c.g * 255), math.floor(c.b * 255), name)
+end
+
+local function RefreshProfiles()
+	local names = ns.ProfileNames()
+	profOffset = math.max(0, math.min(profOffset, #names - ROWS))
+	local active = ns.ActiveProfile()
+	for i, row in ipairs(profRows) do
+		local name = names[profOffset + i]
+		row:SetShown(name ~= nil)
+		if name then
+			local info = ns.ProfileInfo(name)
+			row.profile = name
+			row.name:SetText(name == active and ("|cffffd040%s|r"):format(name) or name)
+			row.by:SetText(info.by and ("par " .. ClassColored(info.by, info.class)) or "")
+		end
+	end
+	profMore:SetText(#names == 0 and "|cff999999Aucun : saisis un nom puis Enregistrer.|r"
+		or #names > ROWS and ("|cff999999%d-%d sur %d (molette)|r"):format(profOffset + 1, profOffset + ROWS, #names) or "")
+end
+
+profList:SetScript("OnMouseWheel", function(_, delta)
+	profOffset = profOffset - delta
+	RefreshProfiles()
+end)
+controls[#controls + 1] = { Refresh = RefreshProfiles }
+
+Note(profPage, 0, -272, 490):SetText("|cff999999Un profil contient tous les reglages du panneau sauf le partenaire, "
+	.. "le role et le tank, plus les sorts du bouton Rotation. Les positions restent propres a chaque perso. "
+	.. "Les profils sont enregistres pour ce compte WoW sur ce PC : l'autre PC a les siens. /duo profile|r")
+
+--------------------------------------------------------------------------------
 -- Refresh
 --------------------------------------------------------------------------------
 
@@ -460,6 +585,10 @@ local function RefreshLive()
 	rxpState:SetText(ns.RXPState and ("Etat : " .. ns.RXPState()) or "")
 	trackingState:SetText(ns.TrackingState and ns.TrackingState() or "")
 	dungeonState:SetText(ns.DungeonStatus and ns.DungeonStatus() or "")
+	local active, changed = ns.ActiveProfile()
+	profState:SetText(not active and "Aucun profil actif sur ce perso."
+		or changed and ("Profil actif : |cffffd040%s|r, |cffff9933modifie depuis|r : Enregistrer pour le mettre a jour."):format(active)
+		or ("Profil actif : |cffffd040%s|r (a jour)."):format(active))
 end
 
 function ns.RefreshOptions()

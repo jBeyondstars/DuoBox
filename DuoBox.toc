@@ -5,6 +5,7 @@
 ## Version: 1.0.0
 ## OptionalDeps: RXPGuides, GatherLite, TomTom, Questie
 ## SavedVariablesPerCharacter: DuoBoxDB
+## SavedVariables: DuoBoxProfiles
 
 Spellbook.lua
 DuoBox.lua
@@ -14,4 +15,5 @@ InteractPriority.lua
 Dungeon.lua
 MeleeLight.lua
 Rotation.lua
+Profiles.lua
 Options.lua
