@@ -49,6 +49,7 @@ local defaults = {
 	dungeon     = false,  -- dungeon mode: the assists take the tank's target (Dungeon.lua)
 	tank        = nil,    -- tank name for the dungeon mode (nil = the group member with the Tank role)
 	meleeLight  = true,   -- warrior range / facing light on the partner's screen (MeleeLight.lua)
+	lightSound  = false,  -- optional sound while the light stays red (Options > Alertes)
 }
 
 local DB
@@ -2376,7 +2377,7 @@ local function OnOff(key, arg)
 	Print(("%s = %s"):format(key, DB[key] and "|cff40ff40on|r" or "|cffff4040off|r"))
 end
 
-local toggles = { sound = "sound", flash = "flash", invite = "autoInvite", quest = "autoQuest", share = "autoShare", rez = "autoRez", frame = "frame", bar = "bar", castbar = "castbar", autonpc = "autoNpc", turnin = "turnin", accept = "acceptAlert", loot = "lootAlert", minimap = "minimap", light = "meleeLight" }
+local toggles = { sound = "sound", flash = "flash", invite = "autoInvite", quest = "autoQuest", share = "autoShare", rez = "autoRez", frame = "frame", bar = "bar", castbar = "castbar", autonpc = "autoNpc", turnin = "turnin", accept = "acceptAlert", loot = "lootAlert", minimap = "minimap", light = "meleeLight", lightsound = "lightSound" }
 
 local function Command(input)
 	local cmd, arg = (input or ""):match("^%s*(%S*)%s*(.-)%s*$")
@@ -2493,6 +2494,7 @@ local function Command(input)
 		Print("  /duo interact [on|off] - touche d'interaction : la cible ennemie avant les objets / PNJ proches (seul : etat)")
 		Print("  /duo sound|flash|invite|quest|share|rez|frame|castbar|autonpc|turnin|accept|loot|minimap [on|off]")
 		Print("  /duo light [on|off|debug|reset] - voyant vert / rouge du guerrier chez le partenaire (/duo move : deplacer, coin : taille)")
+		Print("  /duo lightsound [on|off] - son optionnel quand le voyant reste rouge (desactive par defaut)")
 		Print("  /duo status")
 		Print("  /duo help            - cette aide")
 	end

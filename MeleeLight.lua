@@ -12,6 +12,8 @@
 --     first failed attack until a harmful spell lands, a new target, or 4 s,
 --   * auto-attack: Attack (6603) not active while in combat.
 -- The state goes to the partner as "ML:<code>" (on change, then every 1.5 s).
+-- Partner side, optional (DB.lightSound, off by default): after 1 s of red, a
+-- sound per reason, then every 3 s.
 -- /duo move: drag the light, bottom-right corner to resize. /duo light debug:
 -- what the client answers. Kept out of DuoBox.lua (Lua 5.1's 200 locals).
 --------------------------------------------------------------------------------
@@ -24,6 +26,17 @@ local FACING_HOLD = 4   -- s: longer than a slow weapon swing (the error comes b
 local FAR_HOLD = 1.5    -- s after an "out of range" error
 local STALE = 4         -- s without news: the light hides (partner gone, disconnected)
 local SIZE = 90         -- default size
+local RED_DELAY = 1     -- s of red before the sound (a brief red is not worth a press)
+local RED_REPEAT = 3    -- s between two sounds while it stays red
+local KIT = SOUNDKIT or {}
+-- One sound per reason, so the priest knows without looking; READY_CHECK if one is missing
+local SOUNDS = {
+	R = KIT.ALARM_CLOCK_WARNING_2 or 12867, -- too far
+	F = KIT.ALARM_CLOCK_WARNING_3 or 12889, -- facing the wrong way
+	A = KIT.ALARM_CLOCK_WARNING_1 or 18871, -- not attacking
+	T = KIT.ALARM_CLOCK_WARNING_1 or 18871, -- no target
+}
+local FALLBACK_SOUND = KIT.READY_CHECK or 8960
 local STATES = {
 	G = { 0.1, 0.85, 0.1, "OK" },
 	R = { 0.9, 0.1, 0.1, "TROP LOIN" },
@@ -203,6 +216,15 @@ end)
 grip:Hide()
 
 local shownCode, receivedTime = nil, 0
+local redSince, lastSound = nil, 0
+
+-- Optional (Options > Alertes): tells when to press the warrior's interact key without looking
+local function Sound(code)
+	local db = DB()
+	if not db.sound or not db.lightSound then return end
+	local ok, willPlay = pcall(PlaySound, SOUNDS[code], "Master")
+	if not (ok and willPlay) then pcall(PlaySound, FALLBACK_SOUND, "Master") end
+end
 
 local function Paint(code, name)
 	local s = STATES[code]
@@ -216,6 +238,8 @@ end
 local function OnMessage(code)
 	receivedTime = GetTime()
 	shownCode = STATES[code] and code or nil
+	local red = shownCode ~= nil and shownCode ~= "G"
+	if not red then redSince = nil elseif not redSince then redSince = receivedTime end
 	if not Enabled() or ns.IsMoveMode() then return end
 	if shownCode then
 		local unit = ns.PartnerUnit()
@@ -234,9 +258,15 @@ local function DisplayTick()
 		light.text:SetText("Glisse-moi")
 		return
 	end
-	if not Enabled() or not shownCode or GetTime() - receivedTime > STALE then
-		shownCode = nil
+	local now = GetTime()
+	if not Enabled() or not shownCode or now - receivedTime > STALE then
+		shownCode, redSince = nil, nil
 		light:Hide()
+		return
+	end
+	if redSince and now - redSince >= RED_DELAY and now - lastSound >= RED_REPEAT then
+		lastSound = now
+		Sound(shownCode)
 	end
 end
 

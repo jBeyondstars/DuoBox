@@ -197,6 +197,10 @@ range, **red** with the reason = **TROP LOIN** (too far), **MAL ORIENTE** (facin
 - Facing: the game tells no addon whether you face a mob, so it comes from the "facing the wrong way" error of a
   failed swing or spell: red from the first failed attack until a harmful spell lands (Heroic Strike, Rend...),
   a new target, or 4 s. Battle Shout or Bloodrage need no facing and do not clear it.
+- Optional sound, off by default ("Son quand il reste rouge" in the Alerts tab, or `/duo lightsound on`): after 1 s
+  of red, then every 3 s while it stays red, a sound per reason (too far, facing the wrong way, not attacking / no
+  target). It also follows the Sound option. The answer is one press on the warrior's interact key: with
+  Click-to-Move it runs back to its target, faces it and attacks (an addon cannot move or turn a character by itself).
 - Move and resize: `/duo move` (or the "Deplacer" button of the options), drag the light, drag its bottom-right
   corner to resize it (it stays square); `/duo move` again to save. `/duo light reset`: default place and size.
 - `/duo light debug` on the warrior, during a fight: what the client answers (combat, target, auto-attack, each

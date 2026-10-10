@@ -323,6 +323,11 @@ Slider(alerts, COL2, -70, "hpPet", "PV du familier (cote pretre)", 5, 95, 5, "%d
 Slider(alerts, COL2, -118, "manaPartner", "Mana du partenaire (cote dps)", 5, 95, 5, "%d%%",
 	"Alerte du chasseur quand le mana du pretre passe sous ce seuil.")
 
+Header(alerts, COL2, -176, "Voyant du guerrier")
+Toggle(alerts, COL2, -194, "lightSound", "Son quand il reste rouge",
+	"Optionnel, desactive par defaut. Apres 1 s de rouge, puis toutes les 3 s : un son different pour trop loin, "
+	.. "mal oriente, et n'attaque pas / sans cible. Suit aussi l'option Son. /duo lightsound on|off")
+
 --------------------------------------------------------------------------------
 -- Page 3: Automation
 --------------------------------------------------------------------------------

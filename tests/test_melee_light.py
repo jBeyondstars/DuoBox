@@ -162,6 +162,26 @@ class MeleeLightTest(unittest.TestCase):
             assert(#sent == 0) -- the priest sends nothing
         ''')
 
+    def test_optional_sound_per_reason_while_it_stays_red(self):
+        self.load('class = "PRIEST"; db.sound = true; played = {}; playable = true; '
+                  'function PlaySound(id, channel) assert(channel == "Master"); table.insert(played, id); return playable end')
+        self.run_lua('''
+            local function msg(code) event("CHAT_MSG_ADDON", "DUOBOX", "ML:" .. code, "PARTY", "Partner") end
+            msg("R"); tick(0.5); msg("R"); tick(3); assert(#played == 0) -- off by default
+            msg("G"); tick(4); db.lightSound = true
+            msg("R"); tick(0.5); assert(#played == 0) -- a brief red is not worth a press
+            msg("R"); tick(0.6); assert(played[1] == 12867, tostring(played[1])) -- too far
+            msg("R"); tick(1); msg("R"); tick(1); assert(#played == 1) -- every 3 s, not every tick
+            msg("F"); tick(1.2); assert(played[2] == 12889) -- facing: its own sound
+            msg("G"); tick(4); assert(#played == 2) -- green again: silence
+            msg("A"); tick(0.5); msg("A"); tick(0.6); assert(played[3] == 18871) -- not attacking
+            msg("G"); tick(0.5)
+            playable = false; msg("T"); tick(0.5); msg("T"); tick(3); assert(played[#played] == 8960) -- fallback sound
+            msg("G"); tick(0.5); local n = #played
+            db.lightSound = false; msg("R"); tick(0.5); msg("R"); tick(3); assert(#played == n)
+            db.lightSound = true; db.sound = false; msg("R"); tick(0.5); msg("R"); tick(3); assert(#played == n)
+        ''')
+
     def test_move_mode_resize_and_reset(self):
         self.load('class = "PRIEST"; db.meleeLightSize = 140')
         self.run_lua('''
