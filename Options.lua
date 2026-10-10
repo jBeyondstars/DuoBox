@@ -276,9 +276,9 @@ Button(general, 0, -242, BW, "Inviter le partenaire", function() DuoBoxBtnInvite
 Button(general, COL2 - 6, -242, BW, "Comparer les quetes", function() DuoBoxBtnQuests:Click() end,
 	"Partage tes quetes qui manquent au partenaire.")
 local moveBtn = Button(general, 0, -268, BW, "", Run("move"),
-	"Affiche la barre de cast et l'orientation pour les deplacer (coin bas-droit : taille). Recliquer pour enregistrer.")
+	"Affiche la barre de cast, l'orientation et le voyant du guerrier pour les deplacer (coin bas-droit : taille). Recliquer pour enregistrer.")
 moveBtn.Refresh = function(self)
-	self:SetText(ns.IsMoveMode() and "|cffffd040Terminer le deplacement|r" or "Deplacer cast / orientation")
+	self:SetText(ns.IsMoveMode() and "|cffffd040Terminer le deplacement|r" or "Deplacer cast / orientation / voyant")
 end
 controls[#controls + 1] = moveBtn
 Button(general, COL2 - 6, -268, BW, "Afficher l'etat dans le chat", Run("status"),
@@ -402,13 +402,14 @@ Slider(display, COL2, -74, "facingDist", "Distance chasseur - cible", 5, 40, 1, 
 Button(display, COL2, -118, 200, "Diagnostic orientation", Run("facing debug"),
 	"Affiche dans le chat les valeurs que le client peut lire.")
 local moveBtn2 = Button(display, COL2, -144, 200, "", Run("move"),
-	"Affiche la barre de cast et l'orientation pour les deplacer. Recliquer pour enregistrer.")
+	"Affiche la barre de cast, l'orientation et le voyant du guerrier pour les deplacer (coin bas-droit : taille). Recliquer pour enregistrer.")
 moveBtn2.Refresh = moveBtn.Refresh
 controls[#controls + 1] = moveBtn2
 Toggle(display, COL2, -174, "meleeLight", "Voyant du guerrier (portee / orientation)",
-	"Grand voyant chez le partenaire pendant les combats du guerrier : vert = au corps a corps et oriente, "
-	.. "rouge = trop loin, mal oriente (a la premiere attaque ratee) ou sans cible. Deplacable avec le bouton ci-dessus. "
-	.. "A laisser actif sur les deux persos. /duo light on|off")
+	"Grand voyant chez le partenaire pendant les combats du guerrier : vert = attaque sa cible au corps a corps, "
+	.. "rouge = trop loin, mal oriente (a la premiere attaque ratee), n'attaque pas ou sans cible. "
+	.. "Le bouton ci-dessus (ou /duo move) permet de le glisser, et le coin bas-droit de le redimensionner. "
+	.. "A laisser actif sur les deux persos. /duo light on|off, /duo light debug (sur le guerrier) : ce que le client repond.")
 
 Header(display, 0, -200, "Detections de metiers sur la minimap")
 Toggle(display, 0, -218, "tracking", "Partager les detections (experimental)",

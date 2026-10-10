@@ -189,13 +189,19 @@ which way to turn (left / right with the angle) or that the priest is facing cor
   `/duo facing off` to hide it, `/duo facing debug` to see which values the client can read.
 
 ### Warrior light (priest screen)
-While the warrior (or a rogue) fights, a big light on the partner's screen: **green** = in melee range of its target
-and attacking, **red** with the reason = **TROP LOIN** (too far), **MAL ORIENTE** (facing the wrong way) or
-**PAS DE CIBLE** (in combat without an enemy target). Hidden out of combat.
-- Range: the warrior's client asks the game whether its target is in range of Heroic Strike, every 0.2 s.
+While the warrior (or a rogue) fights, a big light on the partner's screen: **green** = attacking its target in melee
+range, **red** with the reason = **TROP LOIN** (too far), **MAL ORIENTE** (facing the wrong way), **N'ATTAQUE PAS**
+(auto-attack off) or **PAS DE CIBLE** (in combat without an enemy target). Hidden out of combat.
+- Range: every 0.2 s the warrior's client asks whether its target is in range of the learned rank of Heroic Strike
+  (by spell ID, then by spellbook slot, then by name), plus the "out of range" / "too far" errors.
 - Facing: the game tells no addon whether you face a mob, so it comes from the "facing the wrong way" error of a
-  failed swing or spell: red at the first failed attack, green again after a success, a new target or 4 s.
-- On by default on both characters, `/duo light off` or the Display tab to hide it; `/duo move` to move it.
+  failed swing or spell: red from the first failed attack until a harmful spell lands (Heroic Strike, Rend...),
+  a new target, or 4 s. Battle Shout or Bloodrage need no facing and do not clear it.
+- Move and resize: `/duo move` (or the "Deplacer" button of the options), drag the light, drag its bottom-right
+  corner to resize it (it stays square); `/duo move` again to save. `/duo light reset`: default place and size.
+- `/duo light debug` on the warrior, during a fight: what the client answers (combat, target, auto-attack, each
+  range source, last errors) — useful if the light stays green when it should not.
+- On by default on both characters, `/duo light off` or the Display tab to hide it.
 
 ### Partner gathering detections (experimental)
 

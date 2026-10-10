@@ -2416,6 +2416,8 @@ local function Command(input)
 	elseif cmd == "scale" and tonumber(arg) then
 		Set("barScale", math.max(0.5, math.min(2, tonumber(arg))))
 		Print(("echelle de la barre = %.2f%s"):format(DB.barScale, InCombatLockdown() and " (appliquee a la sortie du combat)" or ""))
+	elseif cmd == "light" and (arg:lower() == "debug" or arg:lower() == "reset") then
+		ns.MeleeLightCommand(arg:lower())
 	elseif toggles[cmd] then
 		OnOff(toggles[cmd], arg:lower())
 	elseif cmd == "facing" then
@@ -2490,7 +2492,7 @@ local function Command(input)
 		Print("  /duo tracking [on|off|scan] - detections de metiers du partenaire (experimental, GatherLite)")
 		Print("  /duo interact [on|off] - touche d'interaction : la cible ennemie avant les objets / PNJ proches (seul : etat)")
 		Print("  /duo sound|flash|invite|quest|share|rez|frame|castbar|autonpc|turnin|accept|loot|minimap [on|off]")
-		Print("  /duo light [on|off]  - voyant vert / rouge du guerrier (portee, orientation) chez le partenaire")
+		Print("  /duo light [on|off|debug|reset] - voyant vert / rouge du guerrier chez le partenaire (/duo move : deplacer, coin : taille)")
 		Print("  /duo status")
 		Print("  /duo help            - cette aide")
 	end
