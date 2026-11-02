@@ -224,7 +224,7 @@ class CombatMonitor:
         if not isinstance(interval, (int, float)) or not 50 <= interval <= 5000:
             raise ValueError("combatMonitor.pollIntervalMs must be between 50 and 5000.")
         self.interval = interval / 1000
-        self.process_names = config.get("processNames", ["WowB", "Wow", "WowClassic", "WowClassicB"])
+        self.process_names = config.get("processNames", ["Wow", "WowB", "WowClassic", "WowClassicB"])
         self.log = log
         self.stop_event = threading.Event()
         self.thread = None

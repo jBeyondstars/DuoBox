@@ -18,12 +18,12 @@ Everything is designed around **"one key press = one action in one game client"*
 
 ## 1. Windows / screens
 1. Start the first client and log in with account A (hunter). Start a second client (click "Play" again in Battle.net,
-   or run the client executable a second time, e.g. `_classic_beta_\WowB.exe` on the beta) and log in with account B (priest).
+   or run the client executable a second time, e.g. `_forever_\Wow.exe`) and log in with account B (priest).
 2. Display mode: **Windowed (Fullscreen)** in both clients. Move the second window to the other screen with `Win+Shift+→`.
    In windowed fullscreen, a single **click** on the other screen switches focus (faster than alt+tab).
 3. Type `/duo cvars` once: enables sound in the background (needed to hear the priest's alerts while playing the hunter)
    and auto loot.
-4. If the background client drops to very low FPS: disable Windows Game Mode, set `WowB.exe` to "High performance"
+4. If the background client drops to very low FPS: disable Windows Game Mode, set `Wow.exe` to "High performance"
    in Windows graphics settings, and turn off the NVIDIA "Background Application Max Frame Rate".
 
 ## 2. Addons
@@ -251,7 +251,7 @@ The partner gets a mineral/herb icon on their minimap, with its name on hover.
   visible under the cursor. DuoBox preserves existing textures and restores minimap anchors and mouse settings.
 - Scanning pauses in combat, during camera rotation, while dead, in instances or when targeting a spell.
   Received markers expire after 15 seconds without confirmation, or when the partner disconnects or disables sharing.
-- This indirect scan needs an **in-game compatibility check on WoW Forever / the beta client**, particularly
+- This indirect scan needs an **in-game compatibility check on WoW Forever**, particularly
   in the background window. Automated tests cannot confirm how that client resolves native hover tooltips.
 
 `/duo tracking` shows the state and counters; `/duo tracking scan` checks immediately. If a live scan raises a

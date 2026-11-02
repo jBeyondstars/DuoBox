@@ -206,13 +206,22 @@ class MonitorTests(unittest.TestCase):
             with self.subTest(config=config), CombatMonitor(config) as monitor:
                 self.assertIsNone(monitor.thread)
 
+    def test_default_process_names_include_wow_forever(self):
+        import json
+        monitor = CombatMonitor({})
+        self.assertEqual(monitor.process_names[0], "Wow")
+        self.assertIn("WowB", monitor.process_names)
+        cfg = json.loads((Path(__file__).resolve().parent / "commands.json").read_text(encoding="utf-8"))
+        self.assertEqual(cfg["processNames"][0], "Wow")
+        self.assertIn("WowB", cfg["processNames"])
+
 
 @unittest.skipUnless(os.name == "nt", "Windows GDI capture")
 class WindowsCaptureTests(unittest.TestCase):
     def test_actual_gdi_capture_of_synthetic_signal(self):
         # A memory DC replaces the desktop, exercising native BitBlt/GetDIBits
         # without opening a window, reading the game or requiring a microphone.
-        reader = DesktopReader(["WowB"])
+        reader = DesktopReader(["Wow"])
         pixels, width, height = image(colors(1957, 2077))
         real_user = reader.user
         screen = real_user.GetDC(None)

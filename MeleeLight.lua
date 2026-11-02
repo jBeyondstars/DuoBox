@@ -48,15 +48,14 @@ local STATES = {
 local function DB() return ns.GetDB() end
 
 local function Val(v)
-	if v == nil then return nil end
 	if issecretvalue and issecretvalue(v) then return nil end
 	return v
 end
 
 -- Debug text of a value the client may hide
 local function Show(v)
-	if v == nil then return "nil" end
 	if issecretvalue and issecretvalue(v) then return "SECRET" end
+	if v == nil then return "nil" end
 	return tostring(v)
 end
 
@@ -135,7 +134,7 @@ local function Code()
 	if not Val(UnitAffectingCombat("player")) then return "N" end
 	if not Val(UnitExists("target")) or Val(UnitIsDead("target")) then return "T" end
 	local attack = UnitCanAttack("player", "target")
-	if attack ~= nil and Val(attack) == nil then attack = true end -- secret in an instance: assume an enemy
+	if issecretvalue and issecretvalue(attack) then attack = true end -- secret in an instance: assume an enemy
 	if not attack then return "T" end
 	local now = GetTime()
 	if InRange() == false or now - farTime < FAR_HOLD then return "R" end

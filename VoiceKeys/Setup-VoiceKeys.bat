@@ -8,6 +8,18 @@ where py >nul 2>nul && (set PY=py -3) || (set PY=python)
 if not exist ".venv\Scripts\python.exe" (
     echo Creating the Python virtual environment...
     %PY% -m venv .venv || goto :error
+) else (
+    ".venv\Scripts\pip.exe" --version >nul 2>nul
+    if errorlevel 1 (
+        echo Updating the Python virtual environment paths...
+        %PY% -m venv .venv >nul 2>nul
+        ".venv\Scripts\python.exe" -c "import pathlib, re; s = pathlib.Path('.venv/Scripts').resolve(); py = b'#!\x22' + str(s / 'python.exe').encode('utf-8') + b'\x22'; [p.write_bytes(re.sub(rb'#!\x22?[^\r\n]+python\.exe\x22?', lambda _: py, p.read_bytes())) for p in s.glob('*.exe')]" >nul 2>nul
+        ".venv\Scripts\pip.exe" --version >nul 2>nul
+        if errorlevel 1 (
+            echo Recreating the Python virtual environment...
+            %PY% -m venv --clear .venv || goto :error
+        )
+    )
 )
 
 echo Installing vosk and sounddevice...

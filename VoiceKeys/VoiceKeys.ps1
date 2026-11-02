@@ -295,7 +295,8 @@ try {
 
         if ($cfg.onlyWhenWowFocused) {
             $fg = Get-ForegroundProcessName
-            if ($cfg.processNames -notcontains $fg) {
+            $procNames = if ($cfg.processNames) { @($cfg.processNames) } else { @('Wow', 'WowB', 'WowClassic', 'WowClassicB') }
+            if ($procNames -notcontains $fg) {
                 Write-Log ("'{0}' ignored: WoW is not the foreground window ({1})." -f $text, $fg) 'DarkYellow'
                 Invoke-Beep 'notFocused'
                 continue

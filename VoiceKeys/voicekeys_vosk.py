@@ -368,7 +368,7 @@ def main():
 
     listening = True
     last_fired = {}
-    process_names = cfg.get("processNames", ["WowB", "Wow", "WowClassic"])
+    process_names = cfg.get("processNames", ["Wow", "WowB", "WowClassic", "WowClassicB"])
     cooldown = cfg.get("cooldownMs", 800) / 1000
     max_utterance = cfg.get("maxUtteranceSec", 4.0)
 

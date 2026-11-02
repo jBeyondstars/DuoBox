@@ -23,7 +23,7 @@ The diagram shows a few examples; see the [VoiceKeys setup and full command list
 - Optional hunter combat-exit notifications (feature flag disabled by default)
 
 ## Install
-Copy the `DuoBox` folder into `World of Warcraft\_classic_\Interface\AddOns\` on both clients, then in game:
+Copy the `DuoBox` folder into `World of Warcraft\_forever_\Interface\AddOns\` (or `_classic_era_\Interface\AddOns\`) on both clients, then in game:
 ```
 /duo partner <OtherCharacterName>
 ```

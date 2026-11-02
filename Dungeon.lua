@@ -14,7 +14,6 @@ local _, ns = ...
 local function DB() return ns.GetDB() end
 
 local function Val(v)
-	if v == nil then return nil end
 	if issecretvalue and issecretvalue(v) then return nil end
 	return v
 end

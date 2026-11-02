@@ -65,7 +65,6 @@ end
 
 -- Some values can be "secret" on this client: they are ignored.
 local function Val(v)
-	if v == nil then return nil end
 	if issecretvalue and issecretvalue(v) then return nil end
 	return v
 end
@@ -439,8 +438,8 @@ local function FacingDebug(silent)
 	local out = {}
 	local function add(s) out[#out + 1] = s end
 	local function show(v)
-		if v == nil then return "nil" end
 		if issecretvalue and issecretvalue(v) then return "SECRET" end
+		if v == nil then return "nil" end
 		if type(v) == "number" then return ("%.2f"):format(v) end
 		return tostring(v)
 	end
