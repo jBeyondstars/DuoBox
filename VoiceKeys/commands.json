@@ -60,7 +60,7 @@
         { "key": "SHIFT-F8",  "label": "Warrior: Overpower",     "phrases": [ "overpower" ] },
         { "key": "SHIFT-F3",  "label": "Warrior: Execute",       "phrases": [ "execute" ] },
         { "key": "SHIFT-F1",  "label": "Warrior: Taunt",         "phrases": [ "taunt" ] },
-        { "key": "CTRL-F10",  "label": "Warrior: multi-target Rotation until the end of the fight", "phrases": [ "multi" ] },
+        { "key": "CTRL-F10",  "label": "Multi-target Rotation until the end of the fight", "phrases": [ "multi" ] },
         { "key": "CTRL-F2",   "label": "Warrior: Defensive Stance (WoW stance bar)", "phrases": [ "defense" ] },
         { "key": "CTRL-F8",   "label": "Warrior: Kick (Shield Bash / Pummel)", "phrases": [ "kick" ] }
     ]

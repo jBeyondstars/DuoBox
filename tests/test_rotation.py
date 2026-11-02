@@ -32,6 +32,8 @@ end
 
 function issecretvalue(v) return v == SECRET end
 function GetTime() return clock end
+playerClass = "WARRIOR"
+function UnitClass() return "x", playerClass end
 function InCombatLockdown() return lockdown end
 function GetBindingKey(cmd) if cmd == "CLICK DuoBoxBtnShout:LeftButton" then return "F2" end end
 function GetCursorInfo() if cursor then return "spell", 1, "spell", cursor end end
@@ -303,11 +305,45 @@ class RotationTest(unittest.TestCase):
             assert(db.rotation[2].when == nil)
         ''')
 
-    def test_panel_is_warrior_only(self):
+    def test_panel_needs_the_button(self):
         self.lua.execute((ROOT / "Rotation.lua").read_text(encoding="utf-8"), "DuoBox", self.lua.globals().ns)
         self.run_lua('''
             ns.ToggleRotation()
-            assert(printed[1]:find("guerrier") and DuoBoxRotation == nil)
+            assert(printed[1]:find("pas encore cree") and DuoBoxRotation == nil)
+        ''')
+
+    def test_other_classes_start_empty_without_auto_attack(self):
+        self.load('playerClass = "PRIEST"; SPELLS[585] = {"Smite", "icon-smite"}; known[585] = true')
+        self.run_lua('''
+            assert(#db.rotation == 0 and db.rotationClass == "PRIEST")
+            assert(macro() == "/assist [noharm][dead] party1\\n/stopmacro [noharm][dead]\\n/follow player", macro())
+            assert(ns.RotationAdd(585) and lines()[#lines()] == "/cast Smite")
+            ns.RotationReset()
+            assert(#db.rotation == 0)
+        ''')
+
+    def test_pet_classes_send_the_pet(self):
+        self.load('playerClass = "HUNTER"')
+        self.run_lua('assert(lines()[3] == "/follow player" and lines()[4] == "/petattack", macro())')
+
+    def test_untagged_list_is_kept_by_the_warrior_and_replaced_on_other_classes(self):
+        self.load('db.rotation = {{id = 78}}')
+        self.run_lua('assert(db.rotationClass == "WARRIOR" and #db.rotation == 1 and db.rotation[1].id == 78)')
+        self.setUp()
+        # a warrior profile loaded on a priest before the lists were per class
+        self.load('playerClass = "PRIEST"; db.rotation = {{id = 78}}')
+        self.run_lua('assert(db.rotationClass == "PRIEST" and #db.rotation == 0)')
+
+    def test_buttons_are_created_once(self):
+        self.lua.execute((ROOT / "Rotation.lua").read_text(encoding="utf-8"), "DuoBox", self.lua.globals().ns)
+        self.run_lua('''
+            playerClass = "MAGE"
+            made = {}
+            function ns.MakeButton(key, label, icon) local b = Obj(); b.icon = Obj(); made[#made + 1] = key; return b end
+            ns.BuildRotationButtons()
+            ns.BuildRotationButtons()
+            assert(#made == 2 and made[1] == "Rotation" and made[2] == "Multi")
+            assert(not ns.RotationMacro(false, false):find("startattack"))
         ''')
 
 

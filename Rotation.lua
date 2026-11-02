@@ -1,6 +1,6 @@
 --------------------------------------------------------------------------------
--- DuoBox / warrior Rotation button: 1 press = 1 action, chosen by the game.
--- Its spells (DB.rotation, per character) are edited in the panel opened by
+-- DuoBox / Rotation button, every class: 1 press = 1 action, chosen by the game.
+-- Its spells (DB.rotation, per character and its class) are edited in the panel opened by
 -- /duo rotation or a right-click on the button. Macros cannot test buffs,
 -- cooldowns, rage or the number of enemies, so each step is either:
 --   * "each press": /cast in list order, the game skips what is not usable
@@ -23,17 +23,25 @@ local REFRESH = 30 -- seconds left under which a "once per fight" buff counts as
 local MAX_STEPS = 10
 local BATTLE_SHOUT = 6673
 local QUESTION = "Interface\\Icons\\INV_Misc_QuestionMark"
--- Battle Shout once per fight, Overpower (after a dodge), Thunder Clap in multi-target mode, Heroic Strike
-local DEFAULT = { { id = BATTLE_SHOUT, once = true }, { id = 7384 }, { id = 6343, when = "aoe" }, { id = 78 } }
+-- Default list of each class (empty for the others). Warrior: Battle Shout once per fight,
+-- Overpower (after a dodge), Thunder Clap in multi-target mode, Heroic Strike
+local DEFAULTS = {
+	WARRIOR = { { id = BATTLE_SHOUT, once = true }, { id = 7384 }, { id = 6343, when = "aoe" }, { id = 78 } },
+}
+local DEFAULT_TIP = { WARRIOR = "Cri de guerre (1x par combat), Fulgurance, Coup de tonnerre (multi seulement), Frappe heroique." }
+-- Line after the target lines: auto attack for melee classes, the pet for pet classes, nothing for casters
+local ATTACK = { WARRIOR = "/startattack", ROGUE = "/startattack", PALADIN = "/startattack", SHAMAN = "/startattack",
+	DRUID = "/startattack", HUNTER = "/petattack", WARLOCK = "/petattack" }
 
 local function DB() return ns.GetDB() end
+local function Class() return (select(2, UnitClass("player"))) end
 
 local function Val(v)
 	if issecretvalue and issecretvalue(v) then return nil end
 	return v
 end
 
-local button        -- DuoBoxBtnRotation, given by ns.SetupRotation (warrior only)
+local button        -- DuoBoxBtnRotation, given by ns.SetupRotation
 local multi         -- DuoBoxBtnMulti: sets the Rotation macro to the multi-target one
 local needed = {}   -- [spellID] = true: "once per fight" buff to cast (decided out of combat)
 local seen = {}     -- [spellID] = true: buff seen during this fight (alert when it ends)
@@ -42,11 +50,14 @@ local panel, RefreshPanel -- created on first open
 
 -- Steps of this character: { id = spellID, once = true (once per fight), off = true (disabled),
 -- when = nil (always) / "aoe" (multi-target mode only) / "single" (single target only) }
+-- DB.rotationClass: class of the list. Before it existed only the warrior had a Rotation, so an
+-- untagged list on another class came from a warrior profile: replaced by that class's default.
 local function Steps()
-	local db = DB()
-	if type(db.rotation) ~= "table" then
-		db.rotation = {}
-		for i, s in ipairs(DEFAULT) do db.rotation[i] = { id = s.id, once = s.once, when = s.when } end
+	local db, class = DB(), Class()
+	if db.rotationClass == nil and class == "WARRIOR" then db.rotationClass = class end
+	if type(db.rotation) ~= "table" or db.rotationClass ~= class then
+		db.rotation, db.rotationClass = {}, class
+		for i, s in ipairs(DEFAULTS[class] or {}) do db.rotation[i] = { id = s.id, once = s.once, when = s.when } end
 	end
 	return db.rotation
 end
@@ -72,7 +83,7 @@ local function Macro(fight, aoe)
 	-- Keep your own live enemy target, otherwise take the partner's (the tank's in dungeon mode)
 	lines[#lines + 1] = "/assist [noharm][dead] " .. ns.AssistUnit()
 	lines[#lines + 1] = "/stopmacro [noharm][dead]"
-	lines[#lines + 1] = ns.STOP_FOLLOW .. "/startattack"
+	lines[#lines + 1] = ((ns.STOP_FOLLOW .. (ATTACK[Class()] or "")):gsub("\n$", ""))
 	for _, s in ipairs(Steps()) do
 		local name = not s.once and Usable(s, aoe)
 		if name then lines[#lines + 1] = "/cast " .. name end
@@ -174,13 +185,15 @@ ns.RotationSteps = Steps
 
 --------------------------------------------------------------------------------
 -- Failures expected from a press (the rotation is spammed): Overpower without a
--- dodge, global cooldown, not enough rage, a stance spell in the wrong stance.
+-- dodge, global cooldown, not enough rage / mana / energy, a stance spell in the
+-- wrong stance, a press during a cast.
 -- Hidden, silent and not relayed to the partner (DuoBox.lua asks too).
 --------------------------------------------------------------------------------
 
 local EXPECTED = {}
 for _, g in ipairs({ "SPELL_FAILED_CASTER_AURASTATE", "SPELL_FAILED_NOT_READY", "ERR_ABILITY_COOLDOWN",
-		"ERR_SPELL_COOLDOWN", "ERR_OUT_OF_RAGE", "SPELL_FAILED_NO_POWER" }) do
+		"ERR_SPELL_COOLDOWN", "ERR_OUT_OF_RAGE", "SPELL_FAILED_NO_POWER", "ERR_OUT_OF_MANA", "ERR_OUT_OF_ENERGY",
+		"ERR_OUT_OF_FOCUS", "SPELL_FAILED_SPELL_IN_PROGRESS" }) do
 	if _G[g] then EXPECTED[_G[g]] = true end
 end
 -- "Must be in %s": the stance part matches anything
@@ -257,7 +270,8 @@ function ns.RotationReset()
 end
 
 --------------------------------------------------------------------------------
--- Buttons (created by DuoBox.lua in the warrior row of the bar)
+-- Buttons, row 2 of the bar: among the warrior attacks (DuoBox.lua), after the
+-- class buttons for the other classes (at login)
 --------------------------------------------------------------------------------
 
 local events = CreateFrame("Frame")
@@ -329,6 +343,25 @@ function ns.SetupRotation(b, m)
 	Check()
 end
 
+-- Creates Rotation and Multi once (icons: the warrior's; the others take the first spell's)
+function ns.BuildRotationButtons(icon, multiIcon)
+	if button then return end
+	local rot = ns.MakeButton("Rotation", "Rotation", icon or QUESTION, true, 2)
+	rot:SetAttribute("type", "macro")
+	rot.noDesat = true
+	rot.hint = "Garde ta cible ennemie, sinon prend celle du partenaire\nArrete le follow, "
+		.. (ATTACK[Class()] == "/startattack" and "attaque auto, " or ATTACK[Class()] and "familier a l'attaque, " or "")
+		.. "puis le premier sort utilisable de la liste"
+	-- Multi-target mode until the end of the fight (key or voice "multi"): Blizzard's secure
+	-- "attribute" action writes the Rotation macro, in combat too (values set by Update)
+	local m = ns.MakeButton("Multi", "Multi-cibles", multiIcon or "Interface\\Icons\\Ability_Whirlwind", true, 2)
+	m:SetAttribute("type", "attribute")
+	m.noDesat = true
+	m.hint = "Passe le bouton Rotation en multi-cibles jusqu'a la fin du combat, ou du prochain s'il est appuye "
+		.. "hors combat (ne lance rien)"
+	ns.SetupRotation(rot, m)
+end
+
 --------------------------------------------------------------------------------
 -- Panel: the list in priority order, add / remove / move / mode, macro preview
 --------------------------------------------------------------------------------
@@ -386,13 +419,15 @@ local function AddFromCursor()
 end
 
 local MODE_TIP = "|cffffd040Chaque appui|r : tente le sort a chaque appui ; le jeu le saute s'il n'est pas "
-	.. "utilisable (Fulgurance apres une esquive, Execution sous 20 %, recharge, rage, posture).\n"
-	.. "|cffffd0401x par combat|r : pour tes buffs (Cri de guerre). Lance avant les attaques s'il manque, ou "
+	.. "utilisable (recharge, rage / mana / energie, posture ; guerrier : Fulgurance apres une esquive, "
+	.. "Execution sous 20 %). Un sort toujours utilisable (Chatiment, Eclair de givre...) bloque ceux du "
+	.. "dessous : mets-le en dernier.\n"
+	.. "|cffffd0401x par combat|r : pour tes buffs (Cri de guerre, Armure de givre...).Lance avant les attaques s'il manque, ou "
 	.. "finit dans moins de 30 s, quand le combat commence ; une seule fois, car la macro ne peut pas changer "
 	.. "pendant un combat. Le buff doit porter le nom du sort. S'il expire en combat : alerte."
 local WHEN_TIP = "|cffffd040Toujours|r : en mono-cible et en multi-cibles.\n"
 	.. "|cffffd040Multi seulement|r : seulement en mode multi-cibles, apres le bouton Multi (touche ou voix 'multi'), "
-	.. "jusqu'a la fin du combat. Ex. : Coup de tonnerre.\n"
+	.. "jusqu'a la fin du combat. Ex. : Coup de tonnerre, Explosion des arcanes.\n"
 	.. "|cffffd040Mono seulement|r : saute en mode multi-cibles."
 local WHEN_TEXT = { aoe = "Multi seulement", single = "Mono seulement" }
 local WHEN_NEXT = { aoe = "single", single = false }
@@ -478,7 +513,8 @@ local function CreatePanel()
 		.. "Pour ajouter un sort : glisse-le depuis le grimoire sur ce panneau, ou tape son nom.\n"
 		.. "Bouton Multi (touche ou voix 'multi') : mode multi-cibles jusqu'a la fin du combat (hors combat : "
 		.. "pour le prochain) ; clic droit sur Multi : retour mono-cible. Place les sorts multi au-dessus de "
-		.. "Frappe heroique, sinon elle prend la rage.")
+		.. "tes attaques mono-cible (guerrier : Frappe heroique), sinon elles passent avant. "
+		.. "Une liste par classe : celle de tes autres classes ne change pas.")
 	TOP = -38 - math.ceil(help:GetStringHeight()) - 10
 
 	for i = 1, MAX_STEPS do CreateRow(i) end
@@ -503,7 +539,7 @@ local function CreatePanel()
 	panel.add = TextButton(panel, 86, "Ajouter", AddTyped)
 
 	panel.reset = TextButton(panel, 110, "Par defaut", function() ns.RotationReset() end, "Liste par defaut",
-		"Cri de guerre (1x par combat), Fulgurance, Coup de tonnerre (multi seulement), Frappe heroique.")
+		DEFAULT_TIP[Class()] or "Vide la liste.")
 	panel.status = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	panel.status:SetJustifyH("LEFT")
 	panel.status:SetWidth(WIDTH - 150)
@@ -552,7 +588,8 @@ RefreshPanel = function()
 	panel.reset:ClearAllPoints(); panel.reset:SetPoint("TOPLEFT", 15, y)
 	panel.status:ClearAllPoints(); panel.status:SetPoint("TOPLEFT", 135, y - 5)
 	panel.status:SetText(InCombatLockdown() and "|cffffd040En combat : changements appliques a la fin du combat.|r"
-		or #steps == 0 and "|cff999999Liste vide : le bouton attaque seulement en auto.|r"
+		or #steps == 0 and ("|cff999999Liste vide : le bouton %s seulement.|r"):format(
+			ATTACK[Class()] == "/startattack" and "attaque en auto" or ATTACK[Class()] and "envoie le familier" or "prend la cible")
 		or math.max(#single, #aoe) > 255 and "|cffff8040Macro de plus de 255 caracteres : verifie en jeu que les derniers sorts partent.|r"
 		or "")
 
@@ -571,7 +608,7 @@ end
 
 function ns.ToggleRotation()
 	if not button then
-		ns.Print("le bouton Rotation est reserve au guerrier.")
+		ns.Print("le bouton Rotation n'est pas encore cree (attends la fin du chargement).")
 		return
 	end
 	if not panel then CreatePanel() end

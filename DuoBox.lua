@@ -753,7 +753,7 @@ for _, g in ipairs({ "SPELL_FAILED_ONLY_SHAPESHIFT" }) do
 end
 
 local function IsRelayedError(msg)
-	-- expected failures of a warrior Rotation press (Rotation.lua): not relayed
+	-- expected failures of a Rotation press (Rotation.lua): not relayed
 	if ns.IsRotationError and ns.IsRotationError(msg) then return false end
 	if RELAYED_ERRORS[msg] then return true end
 	for _, p in ipairs(RELAYED_PATTERNS) do
@@ -1132,7 +1132,9 @@ local function MacroList()
 			{ "D-Wait",    "/follow player" }, -- following yourself = stop following
 			-- Talk to the partner's target (NPC) and accept / turn in its quests
 			{ "D-Talk",    ("#showtooltip\n/assist %s\n/duo npc\n/interact"):format(T) },
-			{ "D-Smite",   ("#showtooltip Smite\n/assist %s\n/cast [harm,nodead] Smite"):format(A) },
+			-- Take the partner's target (the tank's in dungeon mode); moving to it will come later
+			{ "D-Assist",  ("#showtooltip\n/assist %s"):format(A) },
+			{ "D-Smite",  ("#showtooltip Smite\n/assist %s\n/cast [harm,nodead] Smite"):format(A) },
 			{ "D-SmiteW",  ("#showtooltip Smite\n/assist %s\n%s/cast [harm,nodead] Smite"):format(A, STOP_FOLLOW) },
 			{ "D-SWP",     ("#showtooltip Shadow Word: Pain\n/assist %s\n/cast [harm,nodead] Shadow Word: Pain"):format(A) },
 			{ "D-Wand",    ("#showtooltip Shoot\n/assist %s\n/cast [harm,nodead] Shoot"):format(A) },
@@ -1678,21 +1680,10 @@ local function BuildWarriorButtons()
 		pre = "/stopmacro [noharm][dead]\n" .. STOP_FOLLOW .. "/startattack\n/interact\n" })
 	melee.hint = TARGET_HINT .. ", arrete le follow et attaque au corps a corps\nAvec le Click-to-Move, marche jusqu'a la cible"
 
-	-- One-button rotation: its spells and macro are managed by Rotation.lua (/duo rotation)
+	-- One-button rotation and its Multi button (Rotation.lua, /duo rotation); other classes get them at login
 	local _, strikeIcon = SpellNameIcon(WARRIOR_SPELL.HeroicStrike)
-	local rot = MakeButton("Rotation", "Rotation", strikeIcon or "Interface\\Icons\\Ability_Rogue_Ambush", true, 2)
-	rot:SetAttribute("type", "macro")
-	rot.noDesat = true
-	rot.hint = TARGET_HINT .. "\nArrete le follow, attaque auto, puis le premier sort utilisable de la liste"
-	-- Multi-target mode until the end of the fight (key or voice "multi"): Blizzard's secure
-	-- "attribute" action writes the Rotation macro, in combat too (values set by Rotation.lua)
 	local _, clapIcon = SpellNameIcon(WARRIOR_SPELL.ThunderClap)
-	local multi = MakeButton("Multi", "Multi-cibles", clapIcon or "Interface\\Icons\\Spell_Nature_ThunderClap", true, 2)
-	multi:SetAttribute("type", "attribute")
-	multi.noDesat = true
-	multi.hint = "Passe le bouton Rotation en multi-cibles jusqu'a la fin du combat, ou du prochain s'il est appuye "
-		.. "hors combat (ne lance rien)"
-	ns.SetupRotation(rot, multi)
+	ns.BuildRotationButtons(strikeIcon, clapIcon)
 
 	attack("Strike", WARRIOR_SPELL.HeroicStrike)
 	attack("Rend", WARRIOR_SPELL.Rend)
@@ -2052,8 +2043,8 @@ for key, label in pairs({
 	Concussive = "Trait de choc + assist + stop follow (chasseur)",
 	Melee = "Attaque corps a corps + assist (chasseur, guerrier)",
 	Shout = "Cri de guerre (guerrier)", Charge = "Charge + assist + stop follow (guerrier)",
-	Rotation = "Rotation : premier sort utilisable de la liste + assist (guerrier, /duo rotation)",
-	Multi = "Rotation en multi-cibles jusqu'a la fin du combat (guerrier)",
+	Rotation = "Rotation : premier sort utilisable de la liste + assist (/duo rotation)",
+	Multi = "Rotation en multi-cibles jusqu'a la fin du combat",
 	Strike = "Frappe heroique + assist (guerrier)", Rend = "Pourfendre + assist (guerrier)",
 	Sunder = "Fracasser armure + assist (guerrier)", Clap = "Coup de tonnerre + assist (guerrier)",
 	Hamstring = "Brise-genou + assist (guerrier)", Overpower = "Fulgurance + assist (guerrier)",
@@ -2080,6 +2071,7 @@ ns.UpdateBar = UpdateBar
 ns.BuffRemaining = BuffRemaining
 ns.BarUnit = BarUnit
 ns.STOP_FOLLOW = STOP_FOLLOW
+ns.MakeButton = MakeButton
 
 --------------------------------------------------------------------------------
 -- Events
@@ -2191,6 +2183,7 @@ f:SetScript("OnEvent", function(self, event, ...)
 		BuildPriestButtons()
 		BuildHunterButtons()
 		BuildWarriorButtons()
+		ns.BuildRotationButtons() -- every class (the warrior already has them, among its attacks)
 		BuildConfigButton()
 		ApplyCastLayout()
 		UpdateHotkeys()
@@ -2488,7 +2481,7 @@ local function Command(input)
 		Print("  /duo bar [on|off]    - barre Follow / Cibler / Echange (Maj+glisser pour deplacer)")
 		Print("  /duo scale <0.5-2>   - taille de la barre (1 = normal)")
 		Print("  /duo keys            - raccourcis clavier des boutons de la barre")
-		Print("  /duo rotation        - sorts du bouton Rotation (guerrier ; aussi clic droit sur le bouton)")
+		Print("  /duo rotation        - sorts du bouton Rotation (par classe ; aussi clic droit sur le bouton)")
 		Print("  /duo dungeon [on|off] - mode donjon : les assists prennent la cible du tank")
 		Print("  /duo tank <Nom>|auto - tank du mode donjon (auto : le membre au role Tank)")
 		Print("  /duo move            - deplacer / redimensionner la barre de cast et l'orientation")

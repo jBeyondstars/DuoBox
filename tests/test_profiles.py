@@ -69,20 +69,56 @@ class ProfilesTest(unittest.TestCase):
 
     def test_rotation_is_copied_and_kept_when_the_profile_has_none(self):
         self.run_lua('''
-            db.rotation = {{id = 6673, once = true}, {id = 78}}
+            db.rotation, db.rotationClass = {{id = 6673, once = true}, {id = 78}}, "WARRIOR"
             ns.ProfileSave("Guerrier")
             db.rotation[2].id = 7384 -- edits after the save do not change the profile
-            assert(DuoBoxProfiles.Guerrier.rotation[2].id == 78)
+            assert(DuoBoxProfiles.Guerrier.rotations.WARRIOR[2].id == 78)
             ns.ProfileLoad("Guerrier")
             assert(db.rotation[2].id == 78 and sets[#sets] == "rotation")
             db.rotation[1].once = nil
-            assert(DuoBoxProfiles.Guerrier.rotation[1].once == true)
+            assert(DuoBoxProfiles.Guerrier.rotations.WARRIOR[1].once == true)
 
             db.rotation = nil
             ns.ProfileSave("Pretre") -- saved by a character without a rotation
             db.rotation = {{id = 78}}
             ns.ProfileLoad("Pretre")
             assert(db.rotation[1].id == 78)
+        ''')
+
+    def test_one_rotation_per_class(self):
+        self.run_lua('''
+            db.rotation, db.rotationClass = {{id = 78}}, "WARRIOR"
+            ns.ProfileSave("Duo")
+            -- the priest saves the same profile: the warrior's list stays
+            player = {"Duobox Three", "PRIEST"}
+            db.rotation, db.rotationClass = {{id = 585}}, "PRIEST"
+            ns.ProfileSave("Duo")
+            local r = DuoBoxProfiles.Duo.rotations
+            assert(r.WARRIOR[1].id == 78 and r.PRIEST[1].id == 585)
+            -- each class loads its own list
+            db.rotation = {}
+            ns.ProfileLoad("Duo")
+            assert(db.rotation[1].id == 585 and db.rotationClass == "PRIEST")
+            player = {"Duobox Five", "MAGE"}
+            db.rotation, db.rotationClass = {{id = 133}}, "MAGE"
+            ns.ProfileLoad("Duo")
+            assert(db.rotation[1].id == 133)
+            player = {"Duobox Four", "WARRIOR"}
+            db.rotation, db.rotationClass = {}, "WARRIOR"
+            ns.ProfileLoad("Duo")
+            assert(db.rotation[1].id == 78)
+        ''')
+
+    def test_old_profiles_hold_a_warrior_rotation(self):
+        self.run_lua('''
+            DuoBoxProfiles = {Old = {values = {}, rotation = {{id = 78}}, class = "PRIEST"}}
+            player = {"Duobox Three", "PRIEST"}
+            db.rotation, db.rotationClass = {{id = 585}}, "PRIEST"
+            ns.ProfileLoad("Old")
+            assert(db.rotation[1].id == 585)
+            ns.ProfileSave("Old")
+            local r = DuoBoxProfiles.Old.rotations
+            assert(r.WARRIOR[1].id == 78 and r.PRIEST[1].id == 585 and DuoBoxProfiles.Old.rotation == nil)
         ''')
 
     def test_load_is_refused_in_combat(self):

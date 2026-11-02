@@ -14,7 +14,7 @@ local Print = ns.Print
 
 -- Settings copied by a profile: the defaults of DuoBox.lua, minus EXCLUDED
 -- (tests check that every default is in one of the two lists).
--- DB.rotation (warrior Rotation button) is copied too, see Save / Load.
+-- DB.rotation (Rotation button) is copied too, one list per class, see Save / Load.
 local KEYS = {
 	"leader", "hpPartner", "hpPet", "manaPartner", "sound", "flash",
 	"autoInvite", "autoQuest", "autoShare", "autoRez", "autoNpc", "interactEnemy",
@@ -46,7 +46,8 @@ end
 
 local function Trim(s) return ((s or ""):match("^%s*(.-)%s*$")) end
 
--- [name] = { values = { [key] = value }, rotation = steps or nil, by = character, class = "WARRIOR" }
+-- [name] = { values = { [key] = value }, rotations = { [class] = steps } or nil, by = character, class = "WARRIOR" }
+-- (older profiles: rotation = steps, always a warrior's: only the warrior had the button)
 local function Store()
 	if type(DuoBoxProfiles) ~= "table" then DuoBoxProfiles = {} end
 	return DuoBoxProfiles
@@ -70,14 +71,23 @@ local function Value(profile, key)
 	return v
 end
 
--- Each setting the profile would change (rotation: only if the profile has one)
+-- Rotation lists of the profile, by class
+local function Rotations(profile)
+	if profile.rotations then return profile.rotations end
+	return profile.rotation and { WARRIOR = profile.rotation } or {}
+end
+
+local function PlayerClass() return (select(2, UnitClass("player"))) end
+
+-- Each setting the profile would change (rotation: only if the profile has one for this class)
 local function Diff(profile, fn)
 	local db = DB()
 	for _, key in ipairs(KEYS) do
 		local v = Value(profile, key)
 		if not Same(db[key], v) then fn(key, v) end
 	end
-	if profile.rotation and not Same(db.rotation, profile.rotation) then fn("rotation", profile.rotation) end
+	local rotation = Rotations(profile)[PlayerClass()]
+	if rotation and not Same(db.rotation, rotation) then fn("rotation", rotation) end
 end
 
 function ns.ProfileNames()
@@ -112,8 +122,11 @@ function ns.ProfileSave(name)
 	name = Find(name) or name -- same name, other case: replaces it
 	local db, values = DB(), {}
 	for _, key in ipairs(KEYS) do values[key] = Copy(db[key]) end
-	local _, class = UnitClass("player")
-	Store()[name] = { values = values, rotation = type(db.rotation) == "table" and Copy(db.rotation) or nil,
+	-- The lists of the other classes stay: saving on the priest keeps the warrior's
+	local class, old = PlayerClass(), Store()[name]
+	local rotations = old and Copy(Rotations(old)) or {}
+	if type(db.rotation) == "table" and db.rotationClass == class then rotations[class] = Copy(db.rotation) end
+	Store()[name] = { values = values, rotations = next(rotations) and rotations or nil,
 		by = UnitName("player"), class = class }
 	db.profile = name
 	Print(("profil |cffffd040%s|r enregistre (commun aux persos de ce compte)."):format(name))
@@ -132,6 +145,7 @@ function ns.ProfileLoad(name)
 	end
 	local count = 0
 	Diff(Store()[key], function(k, v)
+		if k == "rotation" then DB().rotationClass = PlayerClass() end
 		ns.Set(k, Copy(v))
 		count = count + 1
 	end)

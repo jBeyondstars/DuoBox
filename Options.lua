@@ -292,7 +292,7 @@ Button(general, 0, -294, BW, "Sorts du bouton Rotation", function()
 		rotation:SetPoint("TOPLEFT", panel, "TOPRIGHT", 4, 0)
 		rotation:Raise()
 	end
-end, "Guerrier : choisit les sorts du bouton Rotation et leur ordre (aussi clic droit sur le bouton).")
+end, "Choisit les sorts du bouton Rotation et leur ordre, une liste par classe (aussi clic droit sur le bouton).")
 
 Note(general, COL2 - 6, -299, 222):SetText("|cff999999Toutes ces options existent aussi en commande : /duo help.|r")
 

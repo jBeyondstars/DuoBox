@@ -18,7 +18,7 @@ The diagram shows a few examples; see the [VoiceKeys setup and full command list
 - Configuration profiles (`/duo profile`): save the settings under a name and load them on any character of the account
 - Experimental partner minimap gathering detections: confirms native tooltips at known GatherLite locations, then shares recent mineral/herb sightings (`/duo tracking on` on both characters)
 - Button bar with key bindings (`/duo keys`) and class macros (`/duo macros`)
-- Warrior **Rotation** button: one key casts the first usable spell of a list you edit in game (`/duo rotation`)
+- **Rotation** button (every class, one list per class): one key casts the first usable spell of a list you edit in game (`/duo rotation`)
 - Optional **VoiceKeys**: offline voice commands (Vosk or Windows speech), one phrase = one key
 - Optional hunter combat-exit notifications (feature flag disabled by default)
 

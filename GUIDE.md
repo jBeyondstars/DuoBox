@@ -76,9 +76,9 @@ Health, mana, pet and aggro alerts do not change: they depend on the role (heal 
 A profile is a named copy of the settings, for example `Quetes` and `Donjon`, to switch between them in one click.
 Profils tab of the options panel: type a name, **Enregistrer**; each saved profile has **Charger** and **Supprimer**.
 - A profile holds every setting of the panel (alerts, thresholds, automation, display, RestedXP, leader, dungeon mode)
-  and the spells of the warrior's **Rotation** button. It does not hold the partner, the role, the tank or the frame
-  positions: they stay those of the character. A profile saved by a character without a Rotation list keeps the
-  Rotation of the character that loads it.
+  and the spells of the **Rotation** button, one list per class: saving the profile on the priest keeps the warrior's
+  list in it, and each character loads only its own class's list. It does not hold the partner, the role, the tank or
+  the frame positions: they stay those of the character. A profile without a list for your class keeps your Rotation.
 - Profiles are saved per WoW account on this PC (`WTF/Account/<account>/SavedVariables/DuoBox.lua`): all characters of
   the account see them, the characters of another account or of the other PC have their own.
 - Loading replaces the character's settings (out of combat). Later changes are not saved in the profile until you save
@@ -155,6 +155,11 @@ Always shown, semi-transparent, opaque on mouse-over. Shift+drag to move it, `/d
   right-click Multi to go back to single target. Put the multi-target spells above Heroic Strike in the list (or mark
   Heroic Strike "Mono seulement"): queued on every press, it spends the rage Thunder Clap needs. A macro cannot count enemies and an addon cannot change it during a
   fight: Blizzard's secure "attribute" action, triggered by your press, is what writes the multi-target macro.
+- **Rotation** · **Multi** (every class, at the end of row 2; among the attacks for the warrior): the same one-button
+  rotation with its own list per class (empty at first except for the warrior; see "Rotation panel"). It keeps your
+  live enemy target or takes the partner's, stops following, then starts the auto-attack (warrior, rogue, paladin,
+  shaman, druid) or sends the pet (hunter, warlock); priests and mages only cast. Mana, energy and "another action
+  is in progress" failures of a press are hidden too.
 - Fortitude / Shield / Renew / Heal / Dispel: click = partner, **Shift** = partner's pet, **Ctrl** = yourself.
 - **Heal**, **Resurrection** and **Smite + Wait** stop following before casting (moving would interrupt the cast):
   follow again afterwards. **Wand** keeps following (use **Wait** first if the priest must stand still).
@@ -162,15 +167,16 @@ Always shown, semi-transparent, opaque on mouse-over. Shift+drag to move it, `/d
 - **Compare quests** shares your quests that the partner is missing and tells you which ones they have in addition
   (then click "Compare" on their window).
 
-### Rotation panel (warrior)
+### Rotation panel (every class)
 Right-click the **Rotation** button, `/duo rotation`, or **Sorts du bouton Rotation** in the options panel.
-The list is saved per character (10 spells at most):
+The list is saved per character, for its class (10 spells at most):
 - **Add** a spell by dragging it from the spellbook onto the panel, or by typing its name and pressing Enter.
 - **Order**: arrows up / down; the game tries the spells from top to bottom on each press.
 - **Mode** of each spell:
   - **Chaque appui** (each press): tried on every press, skipped by the game when it is not usable. This fits the
     attacks the game gates by itself: Overpower after a dodge, Execute under 20%, a cooldown, not enough rage.
-    A spell that is always usable (Rend, Sunder Armor) would be cast on every press and block the spells below it.
+    A spell that is always usable (Rend, Sunder Armor, Smite, Frostbolt) would be cast on every press and block the
+    spells below it: put it last.
   - **1x par combat** (once per fight), for your own buffs (Battle Shout): cast before the attacks when the buff is
     missing, or ends within 30 s, as the fight starts. Macros cannot check buffs and cannot change during a fight,
     so this is decided out of combat and cast once (with 10 rage for Battle Shout); the icon shows the buff until then.
@@ -179,7 +185,8 @@ The list is saved per character (10 spells at most):
 - **Cibles** (targets) of each spell: **Toujours** (always), **Multi seulement** (only after the Multi button, e.g.
   Thunder Clap) or **Mono seulement** (skipped in multi-target mode).
 - **Actif** (enabled): unchecked keeps the spell in the list without casting it. Spells not learned yet are skipped.
-- **Par defaut** restores Battle Shout (once per fight), Overpower, Thunder Clap (multi only), Heroic Strike.
+- **Par defaut** restores Battle Shout (once per fight), Overpower, Thunder Clap (multi only), Heroic Strike for the
+  warrior, and empties the list for the other classes.
 - The bottom of the panel shows both macros, single and multi target. Changes made in combat apply at the end of the
   fight.
 
@@ -301,6 +308,7 @@ so the guide also counts the partner:
 | D-Follow | `/follow` the hunter | `F` |
 | D-Wait | stop following (`/follow player`) | `G` |
 | D-Talk | target the hunter's target (NPC), talk to it, accept / turn in its quests | `T` |
+| D-Assist | take the partner's target (the tank's in dungeon mode) | `Shift+T` |
 | D-Smite / D-SWP / D-Wand | assist the hunter then Smite / Shadow Word: Pain / Wand | `4` `5` `6` |
 | D-SmiteW | assist the hunter, stop following, then Smite | |
 | D-LHeal, D-Heal, D-Flash | heals | `1` `2` `3` |
