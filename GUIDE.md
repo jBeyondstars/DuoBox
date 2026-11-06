@@ -640,10 +640,11 @@ Folder `DuoBox\DuoRelay` (Windows PowerShell 5.1, nothing to install). Same fold
 
 **What is relayed**
 - Only a click in WoW on PC 1 with Ctrl and no other modifier. Left / right buttons (they turn the camera when
-  dragged): a real click only, released within 0.5 s, the mouse moved 6 px at most, not a camera turn (the cursor
-  hides). Middle and side buttons: relayed as soon as pressed, whatever the mouse does.
+  dragged): a real click only, released within 0.5 s and the mouse moved 6 px at most. WoW hides the cursor as
+  soon as a button is held over the 3D world, even for a plain click, and keeps it in place while the camera
+  turns: only the time tells a camera turn from a click. Middle and side buttons: relayed as soon as pressed.
 - The PC 1 window lists every Ctrl+click that is not relayed while the relay is ON, with the reason
-  (`mouse moved 9 px`, `held over 500 ms`, `cursor hidden`, `WoW is not the foreground window`). Nothing listed
+  (`mouse moved 9 px`, `held over 500 ms`, `WoW is not the foreground window`). Nothing listed
   at all: the script did not see the button (mouse software turning it into a key, see above).
 - **Any** Ctrl+click in the WoW window counts, even on the interface (Ctrl+click on an item = dressing room)
   or on the ground. In that case the warrior assists the priest's current target. Switch the relay OFF when you don't need it.

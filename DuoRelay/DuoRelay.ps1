@@ -93,7 +93,8 @@ public static class RelayInput {
 
     public static bool IsDown(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
 
-    // Cursor position; returns false while the cursor is hidden
+    // Cursor position; returns false while the cursor is hidden (not used for clicks:
+    // WoW hides it whenever a button is held over the 3D world)
     // (WoW hides it while the mouse turns the camera)
     public static bool Cursor(out int x, out int y) {
         CURSORINFO ci = new CURSORINFO();
@@ -342,20 +343,20 @@ function Test-WowForeground {
 # One poll of a trigger's mouse button. Returns $true when a click is relayed.
 # $ok: pressed with the modifier, relay ON, WoW focused.
 # $drag = $true (left / right buttons, which turn the camera when dragged): only a
-# real click, released within $maxMs, cursor moved at most $maxMove px and not
-# hidden meanwhile (a camera drag hides it; a cursor already hidden at the press
-# is not taken as a drag). $s.reason then says why a press was dropped.
+# click released within $maxMs, the cursor moved at most $maxMove px; $s.reason
+# then says why a press was dropped. The cursor is not used: WoW hides it as soon
+# as a button is held over the 3D world, for a plain click too (seen 2026-11-06),
+# and keeps it in place while the camera turns, so only the time tells a drag.
 # $drag = $false (middle, side buttons): relayed as soon as pressed.
-function Step-Click($s, [bool]$down, [bool]$ok, [int]$x, [int]$y, [bool]$visible, [long]$now, [int]$maxMove, [int]$maxMs, [bool]$drag = $true) {
+function Step-Click($s, [bool]$down, [bool]$ok, [int]$x, [int]$y, [long]$now, [int]$maxMove, [int]$maxMs, [bool]$drag = $true) {
     $fired = $false
     if ($down -and -not $s.wasDown) {
-        $s.armed = $ok -and $drag; $s.x = $x; $s.y = $y; $s.t = $now; $s.shown = $visible
+        $s.armed = $ok -and $drag; $s.x = $x; $s.y = $y; $s.t = $now
         $fired = $ok -and -not $drag
     } elseif ($s.armed) {
         $dist = [math]::Max([math]::Abs($x - $s.x), [math]::Abs($y - $s.y))
         if ($dist -gt $maxMove) { $s.armed = $false; $s.reason = "mouse moved $dist px (max ${maxMove}: a drag turns the camera)" }
-        elseif ($s.shown -and -not $visible) { $s.armed = $false; $s.reason = 'cursor hidden (camera turn)' }
-        elseif (($now - $s.t) -gt $maxMs) { $s.armed = $false; $s.reason = "held over $maxMs ms" }
+        elseif (($now - $s.t) -gt $maxMs) { $s.armed = $false; $s.reason = "held over $maxMs ms (a camera turn?)" }
         elseif (-not $down) { $fired = $true }
     }
     if (-not $down) { $s.armed = $false }
@@ -451,7 +452,7 @@ function Start-Sender {
             $toggleWasHeld = $held
 
             # Clicks
-            $visible = [RelayInput]::Cursor([ref]$cx, [ref]$cy)
+            [void][RelayInput]::Cursor([ref]$cx, [ref]$cy)
             foreach ($t in $Triggers.Values) {
                 $down = [RelayInput]::IsDown($t.buttonVk)
                 $ok = $false
@@ -460,7 +461,7 @@ function Start-Sender {
                     $ok = Test-WowForeground
                     if (-not $ok) { Write-Log ("{0} not relayed: WoW is not the foreground window" -f $t.combo) 'DarkYellow' }
                 }
-                $fired = Step-Click $t.state $down $ok $cx $cy $visible $now ([int]$cfg.maxClickMovePx) ([int]$cfg.maxClickMs) $t.drag
+                $fired = Step-Click $t.state $down $ok $cx $cy $now ([int]$cfg.maxClickMovePx) ([int]$cfg.maxClickMs) $t.drag
                 if ($t.state.reason) {
                     Write-Log ("{0} not relayed: {1}" -f $t.combo, $t.state.reason) 'DarkYellow'
                     $t.state.reason = $null
@@ -633,27 +634,25 @@ function Invoke-SelfTest {
 
     # Click detection
     $run = {
-        param($steps)  # each: down, ok, x, y, visible, t
+        param($steps)  # each: down, ok, x, y, t
         $s = @{ wasDown = $false; armed = $false }; $r = $false
-        foreach ($p in $steps) { $r = Step-Click $s $p[0] $p[1] $p[2] $p[3] $p[4] $p[5] 6 500 }
+        foreach ($p in $steps) { $r = Step-Click $s $p[0] $p[1] $p[2] $p[3] $p[4] 6 500 }
         return $r
     }
-    Check (& $run @(@($true, $true, 100, 100, $true, 0), @($true, $false, 101, 100, $true, 40), @($false, $false, 102, 101, $true, 80))) 'short click fires on release'
-    Check (-not (& $run @(@($true, $false, 100, 100, $true, 0), @($false, $false, 100, 100, $true, 80)))) 'no modifier / relay OFF: nothing'
-    Check (-not (& $run @(@($true, $true, 100, 100, $true, 0), @($true, $true, 130, 100, $true, 40), @($false, $false, 100, 100, $true, 80)))) 'drag (cursor moved): nothing'
-    Check (-not (& $run @(@($true, $true, 100, 100, $true, 0), @($true, $true, 100, 100, $false, 40), @($false, $false, 100, 100, $true, 80)))) 'camera turn (cursor hidden): nothing'
-    Check (-not (& $run @(@($true, $true, 100, 100, $true, 0), @($false, $false, 100, 100, $true, 900)))) 'long press: nothing'
-    Check (& $run @(@($true, $true, 100, 100, $false, 0), @($false, $false, 100, 100, $false, 80))) 'cursor always hidden: click still fires'
+    Check (& $run @(@($true, $true, 100, 100, 0), @($true, $false, 101, 100, 40), @($false, $false, 102, 101, 80))) 'short click fires on release'
+    Check (-not (& $run @(@($true, $false, 100, 100, 0), @($false, $false, 100, 100, 80)))) 'no modifier / relay OFF: nothing'
+    Check (-not (& $run @(@($true, $true, 100, 100, 0), @($true, $true, 130, 100, 40), @($false, $false, 100, 100, 80)))) 'drag (cursor moved): nothing'
+    Check (-not (& $run @(@($true, $true, 100, 100, 0), @($true, $true, 100, 100, 300), @($false, $false, 100, 100, 900)))) 'long press (camera turn, cursor kept in place): nothing'
     $s = @{ wasDown = $false; armed = $false }
-    [void](Step-Click $s $true $true 100 100 $true 0 6 500); [void](Step-Click $s $true $true 109 100 $true 20 6 500)
+    [void](Step-Click $s $true $true 100 100 0 6 500); [void](Step-Click $s $true $true 109 100 20 6 500)
     Check ($s.reason -eq 'mouse moved 9 px (max 6: a drag turns the camera)') "dropped press says why: '$($s.reason)'"
 
     # Side / middle buttons: relayed at the press, whatever the mouse does next
     $s = @{ wasDown = $false; armed = $false }
-    $first = Step-Click $s $true $true 100 100 $true 0 6 500 $false
-    $later = @((Step-Click $s $true $true 140 100 $false 900 6 500 $false), (Step-Click $s $false $false 140 100 $true 950 6 500 $false))
+    $first = Step-Click $s $true $true 100 100 0 6 500 $false
+    $later = @((Step-Click $s $true $true 140 100 900 6 500 $false), (Step-Click $s $false $false 140 100 950 6 500 $false))
     Check ($first -and -not ($later -contains $true) -and -not $s.reason) 'side button: relayed once, at the press'
-    Check (-not (Step-Click @{ wasDown = $false; armed = $false } $true $false 100 100 $true 0 6 500 $false)) 'side button without modifier: nothing'
+    Check (-not (Step-Click @{ wasDown = $false; armed = $false } $true $false 100 100 0 6 500 $false)) 'side button without modifier: nothing'
     $drags = @($Triggers.Values | Where-Object { $_.drag } | ForEach-Object { $_.name }) -join ','
     Check ($drags -eq 'interact,pickup' -and -not $Triggers['follow'].drag) "drag filter only on left / right buttons ($drags)"
 
