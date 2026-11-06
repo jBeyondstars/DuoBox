@@ -418,6 +418,12 @@ Toggle(display, COL2, -174, "meleeLight", "Voyant du guerrier (portee / orientat
 	.. "Le bouton ci-dessus (ou /duo move) permet de le glisser, et le coin bas-droit de le redimensionner. "
 	.. "A laisser actif sur les deux persos. /duo light on|off, /duo light debug (sur le guerrier) : ce que le client repond.")
 
+Header(display, COL2, -212, "Mesure")
+Toggle(display, COL2, -230, "journal", "Journal de combat (pour l'analyse)",
+	"Desactive par defaut. Note chaque combat (voyant, cibles, touches, erreurs) dans le fichier SavedVariables "
+	.. "et lance le journal de combat du jeu (avance : positions). A lire avec tools/analyze_fights.py. "
+	.. "N'agit pas sur le jeu. /duo journal on|off, /duo journal : resume.")
+
 Header(display, 0, -200, "Detections de metiers sur la minimap")
 Toggle(display, 0, -218, "tracking", "Partager les detections (experimental)",
 	"A activer sur les deux persos. Lit les infobulles des vrais points jaunes puis affiche les reperes chez le partenaire. "

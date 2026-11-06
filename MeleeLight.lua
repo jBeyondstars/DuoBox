@@ -142,6 +142,8 @@ local function Code()
 	if Attacking() == false then return "A" end
 	return "G"
 end
+-- Journal.lua: the state of this client's light (nil on a class without one)
+ns.MeleeLightCode = function() if class then return Code() end end
 
 local function SendTick()
 	if not Enabled() or not ns.PartnerUnit() then return end

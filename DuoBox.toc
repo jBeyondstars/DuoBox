@@ -4,7 +4,7 @@
 ## Author: jBeyondstars
 ## Version: 1.0.0
 ## OptionalDeps: RXPGuides, GatherLite, TomTom, Questie
-## SavedVariablesPerCharacter: DuoBoxDB
+## SavedVariablesPerCharacter: DuoBoxDB, DuoBoxJournal
 ## SavedVariables: DuoBoxProfiles
 
 Spellbook.lua
@@ -14,6 +14,7 @@ PartnerTracking.lua
 InteractPriority.lua
 Dungeon.lua
 MeleeLight.lua
+Journal.lua
 Rotation.lua
 Profiles.lua
 Options.lua

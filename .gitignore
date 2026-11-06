@@ -6,3 +6,4 @@ VoiceKeys/__pycache__/
 
 # Lua regression tests run through Python/lupa
 tests/__pycache__/
+tools/__pycache__/

@@ -21,6 +21,7 @@ The diagram shows a few examples; see the [VoiceKeys setup and full command list
 - **Rotation** button (every class, one list per class): one key casts the first usable spell of a list you edit in game (`/duo rotation`)
 - Optional **VoiceKeys**: offline voice commands (Vosk or Windows speech), one phrase = one key
 - Optional hunter combat-exit notifications (feature flag disabled by default)
+- Optional combat journal (`/duo journal on`, off by default) and `tools/analyze_fights.py`: measures the warrior's dead time in hard fights from the journal and the game's combat log
 
 ## Install
 Copy the `DuoBox` folder into `World of Warcraft\_forever_\Interface\AddOns\` (or `_classic_era_\Interface\AddOns\`) on both clients, then in game:

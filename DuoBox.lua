@@ -50,6 +50,7 @@ local defaults = {
 	tank        = nil,    -- tank name for the dungeon mode (nil = the group member with the Tank role)
 	meleeLight  = true,   -- warrior range / facing light on the partner's screen (MeleeLight.lua)
 	lightSound  = false,  -- optional sound while the light stays red (Options > Alertes)
+	journal     = false,  -- combat journal for tools/analyze_fights.py, measurement only (Journal.lua)
 }
 
 local DB
@@ -2352,6 +2353,7 @@ local function Set(key, value)
 		if ns.UpdateMinimapButton then ns.UpdateMinimapButton() end
 	end
 	if key == "meleeLight" and ns.RefreshMeleeLight then ns.RefreshMeleeLight() end
+	if key == "journal" and ns.RefreshJournal then ns.RefreshJournal() end
 	if key == "rotation" and ns.RotationChanged then ns.RotationChanged() end -- loaded by a profile
 	if (key == "tracking" or key == "partner") and ns.RefreshTracking then
 		ns.RefreshTracking()
@@ -2434,6 +2436,12 @@ local function Command(input)
 		ns.RXPCommand(arg)
 	elseif cmd == "tracking" then
 		ns.TrackingCommand(arg:lower())
+	elseif cmd == "journal" then
+		if ns.JournalCommand then
+			ns.JournalCommand(arg:lower())
+		else -- Journal.lua added to the .toc while the game was running
+			Print("Journal.lua n'est pas charge : redemarre completement le jeu.")
+		end
 	elseif cmd == "interact" then
 		if ns.InteractCommand then
 			ns.InteractCommand(arg:lower())
@@ -2494,6 +2502,7 @@ local function Command(input)
 		Print("  /duo light [on|off|debug|reset] - voyant vert / rouge du guerrier chez le partenaire (/duo move : deplacer, coin : taille)")
 		Print("  /duo lightsound [on|off] - son optionnel quand le voyant reste rouge (desactive par defaut)")
 		Print("  /duo profile [save|load|delete <nom>] - profils de reglages, communs aux persos du compte (seul : la liste)")
+		Print("  /duo journal [on|off|clear|cvars] - journal de combat pour tools/analyze_fights.py (mesure, desactive par defaut)")
 		Print("  /duo status")
 		Print("  /duo help            - cette aide")
 	end

@@ -23,7 +23,8 @@ local KEYS = {
 	"meleeLight", "lightSound",
 }
 -- Kept per character: who the partner and the tank are, this character's role, where its button sits
-local EXCLUDED = { partner = true, tank = true, role = true, minimapAngle = true }
+-- and whether the combat journal (a measurement, Journal.lua) is recording
+local EXCLUDED = { partner = true, tank = true, role = true, minimapAngle = true, journal = true }
 ns.PROFILE_KEYS, ns.PROFILE_EXCLUDED = KEYS, EXCLUDED
 
 local function Copy(v)

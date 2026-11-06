@@ -228,6 +228,39 @@ range, **red** with the reason = **TROP LOIN** (too far), **MAL ORIENTE** (facin
   range source, last errors) — useful if the light stays green when it should not.
 - On by default on both characters, `/duo light off` or the Display tab to hide it.
 
+### Combat journal (measurement, off by default)
+To measure what really costs the warrior time in hard fights (several enemies that move) before changing anything.
+`/duo journal on`, or **Journal de combat** in the Display tab, on the warrior (and on the priest to also count its
+key presses). The first time, restart the game completely (new file and new SavedVariables in the `.toc`).
+- Each fight goes to `DuoBoxJournal`, in the character's SavedVariables file (written at `/reload` or logout):
+  light state and reason, your target and the partner's (with dead / alive), every key press (action bar slot with its
+  macro name, interact key, DuoBox buttons), `/assist` and `/target` lines, red error texts, spells cast, live enemies
+  on the nameplates (show them with `V`), and flee emotes. Nothing is cast, targeted or sent to the partner.
+- Switching it on also starts the game's combat log in advanced mode (`advancedCombatLogging` = 1: position and
+  facing of every unit that acts, which no addon can read during a fight), in `_classic_beta_\Logs\WoWCombatLog*.txt`.
+  Switching it off stops the combat log only if the journal started it.
+- `/duo journal`: summary (entries, fights, red seconds per reason). `/duo journal clear`: empty it.
+  `/duo journal cvars`: writes every targeting / interact / combat CVar of this client and its value to the file
+  (`DuoBoxJournal.cvars`), e.g. to check whether `SoftTargetEnemy` exists.
+- 40,000 entries at most (about 2 MB); the oldest are dropped.
+
+**Measuring a change** (`tools\analyze_fights.py`, Python 3, standard library only):
+1. Before playing, write down what counts as better, e.g. "red seconds per fight halved" or "melee uptime +15 points".
+2. `/duo journal on` on the warrior (and the priest), nameplates shown.
+3. Play at least 10 hard pulls, then `/reload` on the warrior so the file is written.
+4. On the warrior's PC: `python tools\analyze_fights.py --json before.json`. It finds the journals under `WTF` and
+   the logs under `Logs`. On another PC, give the files: `--journal <...\SavedVariables\DuoBox.lua>` (several allowed,
+   e.g. the priest's file copied from PC 1) and `--combatlog <WoWCombatLog...txt>`.
+5. After a change, the same kind of pulls: `--since "YYYY-MM-DD HH:MM" --json after.json`, then
+   `python tools\analyze_fights.py --compare before.json after.json`.
+
+The report gives, per fight, the duration, enemies, melee uptime, red seconds per reason, pedal presses and the time
+from a kill to the next swing; then a Pareto of the red causes (with "after a kill", "pedal to a corpse", "partner
+without a live target", "flee"), what each pedal press did to the target, and, with the advanced log, the real
+distance at "too far" and the real angle at "facing the wrong way" (checks the light itself). Melee uptime comes from
+the combat log (each swing covers 1.25 × the weapon speed), not from DuoBox's light. The journal and the combat log
+are aligned on the spells found in both (the report shows the spread).
+
 ### Partner gathering detections (experimental)
 
 Enable **Partager les detections (experimental)** in `/duo` → **Affichage** on both characters,
