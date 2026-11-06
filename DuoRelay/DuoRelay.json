@@ -17,6 +17,14 @@
       "button": "RIGHT",
       "keys": "CTRL-SHIFT-F9",
       "delayMs": 500
+    },
+    {
+      "name": "follow",
+      "label": "DuoBox Follow button (F1): follows the partner, or stops if already following",
+      "modifier": "CTRL",
+      "button": "X1",
+      "keys": "F1",
+      "delayMs": 0
     }
   ],
   "delayMs": 300,

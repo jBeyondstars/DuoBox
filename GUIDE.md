@@ -607,6 +607,13 @@ relaye** on **both** characters (off by default):
   the key has already been pressed by then: Ctrl+right click again.
 - Ctrl+Shift+F9 must not be bound to anything else on the warrior. With the option off, it falls back to F9's binding.
 
+**Ctrl+mouse button 4** (the side button, "back") makes PC 2 press **F1** at once: the DuoBox **Follow** button
+on the warrior. It follows the priest, or **stops following** if it already follows (press again to follow).
+F1 must stay bound to the Follow button on the warrior (`/duo keys`), otherwise change `keys` of the `follow` trigger.
+On the priest, Ctrl+button 4 also reaches WoW: if button 4 is bound there and Ctrl+button 4 is not, WoW runs
+button 4's binding too. Mouse software (Logitech G Hub, Razer Synapse...) that turns the side button into a
+keyboard key hides it from DuoRelay: keep it as a mouse button.
+
 Folder `DuoBox\DuoRelay` (Windows PowerShell 5.1, nothing to install). Same folder and same `DuoRelay.json` on both PCs.
 
 **Setup (once)**
@@ -645,7 +652,8 @@ Folder `DuoBox\DuoRelay` (Windows PowerShell 5.1, nothing to install). Same fold
 - `triggers`: list of `{ name, label, modifier, button, keys, delayMs }`. `modifier`: `CTRL`, `ALT`, `SHIFT`, or a mix
   such as `CTRL-SHIFT` (required). `button`: `LEFT`, `RIGHT`, `MIDDLE`, `X1`, `X2`. `keys`: same format as
   VoiceKeys (`"SHIFT-T, T"`). `delayMs` (optional): this trigger's wait, instead of the global one.
-  Default: `interact` (Ctrl+left, `SHIFT-T, T`) and `pickup` (Ctrl+right, `CTRL-SHIFT-F9` after 500 ms).
+  Default: `interact` (Ctrl+left, `SHIFT-T, T`), `pickup` (Ctrl+right, `CTRL-SHIFT-F9` after 500 ms) and
+  `follow` (Ctrl+button 4 = `X1`, `F1` at once; button 5 is `X2`).
 - `toggleKey` (`CTRL-ALT-D`), `startEnabled` (`false`), `port` (`47815`; run the firewall setup again if you change it).
 - `delayMs`, `minIntervalMs`, `maxClickMovePx`, `maxClickMs`: timings above.
 - `overlay` (label on/off), `overlayX` (`-1` = centered), `overlayY`; `sounds` (beep on ON/OFF, `false` by default).
