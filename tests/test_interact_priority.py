@@ -25,10 +25,20 @@ function UnitIsDead(u) return units[u] ~= nil and (units[u].dead or false) end
 function UnitAffectingCombat(u) return combat[u] or false end
 
 base, temp, refuse, refuseRemove = "3", nil, false, false
+lockdown, blocked = false, 0 -- combat lockdown: the live client blocks CVar changes from addons
+function InCombatLockdown() return lockdown end
 C_CVar = {}
 function C_CVar.GetCVar(name) assert(name == "SoftTargetInteract"); return temp or base end
-function C_CVar.SetTempCVar(name, v) table.insert(calls, "set " .. v); if not refuse then temp = v end end
-function C_CVar.RemoveTempCVar(name) table.insert(calls, "remove"); if not refuseRemove then temp = nil end end
+function C_CVar.SetTempCVar(name, v)
+    table.insert(calls, "set " .. v)
+    if lockdown then blocked = blocked + 1; return end
+    if not refuse then temp = v end
+end
+function C_CVar.RemoveTempCVar(name)
+    table.insert(calls, "remove")
+    if lockdown then blocked = blocked + 1; return end
+    if not refuseRemove then temp = nil end
+end
 C_Timer = { NewTicker = function(_, fn) table.insert(tickers, fn) end }
 
 -- /assist party1 in a macro: the target changes, no event yet
@@ -145,6 +155,50 @@ class InteractPriorityTest(unittest.TestCase):
             units.target = {enemy=true}; event("PLAYER_TARGET_CHANGED"); tick(); tick()
             assert(value() == "3" and #printed == 1 and #calls == 3)
         ''')
+
+    def test_nothing_is_changed_during_combat_lockdown(self):
+        self.load()
+        self.run_lua('''
+            units.target = {enemy=true}; event("PLAYER_TARGET_CHANGED"); assert(value() == "0")
+            event("PLAYER_REGEN_DISABLED"); lockdown = true; combat.player = true
+            local n = #calls
+            units.target.dead = true; tick(); event("PLAYER_TARGET_CHANGED")
+            units.target = nil; AssistUnit("party1"); event("UNIT_TARGET", "party1"); tick()
+            ns.InteractCommand("")
+            assert(#calls == n and blocked == 0 and value() == "0")
+            assert(printed[#printed]:find("tout le combat"))
+            lockdown = false; combat.player = nil; event("PLAYER_REGEN_ENABLED")
+            assert(value() == "3" and blocked == 0)
+        ''')
+
+    def test_fight_start_switches_it_off_until_the_end(self):
+        self.load()
+        self.run_lua('''
+            assert(value() == "3")
+            event("PLAYER_REGEN_DISABLED"); assert(value() == "0")  -- still allowed during this event
+            lockdown = true; tick(); tick(); assert(value() == "0" and blocked == 0)
+            lockdown = false; event("PLAYER_REGEN_ENABLED"); assert(value() == "3")
+        ''')
+
+    def test_option_off_during_a_fight_applies_after_it(self):
+        self.load()
+        self.run_lua('''
+            event("PLAYER_REGEN_DISABLED"); lockdown = true
+            ns.InteractCommand("off"); assert(value() == "0" and blocked == 0)
+            lockdown = false; event("PLAYER_REGEN_ENABLED"); assert(value() == "3")
+            event("PLAYER_REGEN_DISABLED"); assert(value() == "3")
+        ''')
+
+    def test_reload_during_a_fight_clears_our_value_after_it(self):
+        self.load('temp = "0"; lockdown = true')
+        self.run_lua('''
+            assert(value() == "0" and #calls == 0 and blocked == 0)
+            lockdown = false; event("PLAYER_REGEN_ENABLED"); assert(value() == "3")
+        ''')
+
+    def test_priest_fights_keep_soft_interact(self):
+        self.load('class = "PRIEST"')
+        self.run_lua('event("PLAYER_REGEN_DISABLED"); assert(value() == "3" and #calls == 0)')
 
     def test_client_without_temporary_cvars_stays_off(self):
         self.load('C_CVar.SetTempCVar = nil')

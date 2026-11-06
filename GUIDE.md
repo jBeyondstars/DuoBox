@@ -276,12 +276,16 @@ With "Enable Interact Key" (Options → Controls), WoW's interact key (Key Bindi
 goes to the **soft interact target** first: the object, corpse or NPC showing the interact icon, even when your target
 is an enemy. "Assist the priest + interact key" then picked up a nearby object instead of walking to the enemy.
 
-On the warrior (on by default for melee classes), DuoBox switches soft interaction off **while your target is a live
-enemy, and in combat also while the partner's target is one**: the interact key then goes to your target, starts the
-auto-attack and, with Click-to-Move enabled, walks to it. Meanwhile the interact icon disappears from objects.
-Once your enemy is dead (or you clear your target) and the fight is over, the key picks up loot and objects again,
-even if the partner already targets the next mob. In combat, while the partner targets an enemy and you have no
-target, the key does nothing: assist first.
+On the warrior (on by default for melee classes), DuoBox switches soft interaction off: the interact key then goes
+to your target, starts the auto-attack and, with Click-to-Move enabled, walks to it. Meanwhile the interact icon
+disappears from objects.
+- **Out of combat**: while your target is a live enemy, or while the partner fights and its target is one.
+  Once your enemy is dead (or you clear your target) and the fight is over, the key picks up loot and objects again,
+  even if the partner already targets the next mob.
+- **In combat**: off for the whole fight. The game refuses setting changes from an addon during a fight
+  (`ADDON_ACTION_BLOCKED` in BugSack), so DuoBox switches it off as the fight starts, like Blizzard's gamepad
+  targeting, and back after the fight. During a fight the key goes to your target only: it walks to a live enemy,
+  loots a dead one, and does nothing without a target (assist first).
 - The change is a temporary CVar (`SoftTargetInteract` = 0), never saved: your setting comes back by itself.
 - `/duo interact on|off`, or the Automation tab of `/duo`; `/duo interact` alone tells whether objects are skipped
   and why. Needs WoW Forever: Classic Era 1.15 has no temporary CVars.

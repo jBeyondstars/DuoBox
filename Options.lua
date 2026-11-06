@@ -348,8 +348,9 @@ Toggle(auto, 0, -146, "autoNpc", "Bouton Parler / D-Talk : accepter et rendre le
 
 Header(auto, 0, -184, "Touche d'interaction")
 Toggle(auto, 0, -202, "interactEnemy", "La cible ennemie avant les objets et PNJ proches",
-	"Quand ta cible est un ennemi vivant (en combat : aussi celle du partenaire), la touche d'interaction va sur ta cible "
+	"Quand ta cible est un ennemi vivant (ou celle du partenaire s'il combat), la touche d'interaction va sur ta cible "
 	.. "(attaque, et marche jusqu'a elle avec le Click-to-Move) au lieu de l'objet ou du PNJ le plus proche. "
+	.. "En combat : pendant tout le combat (le jeu refuse ce changement en plein combat). "
 	.. "Ennemi mort et combat fini : elle ramasse de nouveau. /duo interact : etat. Active par defaut sur le guerrier.")
 
 Header(auto, 0, -236, "Donjon")
