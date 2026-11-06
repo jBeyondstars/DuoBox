@@ -54,6 +54,8 @@ local defaults = {
 	procOff     = "",     -- spell IDs the event light does not show, "7384,5308" (Options > Alertes)
 	journal     = false,  -- combat journal for tools/analyze_fights.py, measurement only (Journal.lua)
 	pickupRelay = false,  -- DuoRelay Ctrl+right click: the partner picks up the same kind of object (PickupRelay.lua)
+	facingCone  = false,  -- yellow cone at the partner's feet, where it faces (FacingCone.lua)
+	coneHeight  = 100,    -- %: how far under the partner's nameplate the cone starts (its feet)
 }
 
 local DB
@@ -2359,6 +2361,7 @@ local function Set(key, value)
 	if key == "meleeLight" and ns.RefreshMeleeLight then ns.RefreshMeleeLight() end
 	if (key == "procLight" or key == "procOff") and ns.RefreshProcLight then ns.RefreshProcLight() end
 	if key == "journal" and ns.RefreshJournal then ns.RefreshJournal() end
+	if (key == "facingCone" or key == "coneHeight") and ns.RefreshCone then ns.RefreshCone(key) end
 	if key == "rotation" and ns.RotationChanged then ns.RotationChanged() end -- loaded by a profile
 	if (key == "tracking" or key == "partner") and ns.RefreshTracking then
 		ns.RefreshTracking()
@@ -2380,7 +2383,7 @@ local function OnOff(key, arg)
 	Print(("%s = %s"):format(key, DB[key] and "|cff40ff40on|r" or "|cffff4040off|r"))
 end
 
-local toggles = { sound = "sound", flash = "flash", invite = "autoInvite", quest = "autoQuest", share = "autoShare", rez = "autoRez", frame = "frame", bar = "bar", castbar = "castbar", autonpc = "autoNpc", turnin = "turnin", accept = "acceptAlert", loot = "lootAlert", minimap = "minimap", light = "meleeLight", lightsound = "lightSound", proc = "procLight" }
+local toggles = { sound = "sound", flash = "flash", invite = "autoInvite", quest = "autoQuest", share = "autoShare", rez = "autoRez", frame = "frame", bar = "bar", castbar = "castbar", autonpc = "autoNpc", turnin = "turnin", accept = "acceptAlert", loot = "lootAlert", minimap = "minimap", light = "meleeLight", lightsound = "lightSound", proc = "procLight", cone = "facingCone" }
 
 local function Command(input)
 	local cmd, arg = (input or ""):match("^%s*(%S*)%s*(.-)%s*$")
@@ -2427,6 +2430,12 @@ local function Command(input)
 			ns.ProcLightCommand(arg:lower())
 		else -- ProcLight.lua added to the .toc while the game was running
 			Print("ProcLight.lua n'est pas charge : redemarre completement le jeu.")
+		end
+	elseif cmd == "cone" and arg:lower() == "debug" then
+		if ns.ConeCommand then
+			ns.ConeCommand()
+		else -- FacingCone.lua added to the .toc while the game was running
+			Print("FacingCone.lua n'est pas charge : redemarre completement le jeu.")
 		end
 	elseif toggles[cmd] then
 		OnOff(toggles[cmd], arg:lower())
@@ -2513,6 +2522,7 @@ local function Command(input)
 		Print("  /duo light [on|off|debug|reset] - voyant vert / rouge du guerrier chez le partenaire (/duo move : deplacer, coin : taille)")
 		Print("  /duo lightsound [on|off] - son optionnel quand le voyant reste rouge (desactive par defaut)")
 		Print("  /duo proc [on|off|debug|reset] - voyant des evenements : Fulgurance, Execution... du partenaire (sorts : onglet Alertes)")
+		Print("  /duo cone [on|off|debug] - cone jaune aux pieds du partenaire : vers ou il est tourne (hors donjon, desactive par defaut)")
 		Print("  /duo profile [save|load|delete <nom>] - profils de reglages, communs aux persos du compte (seul : la liste)")
 		Print("  /duo journal [on|off|clear|cvars] - journal de combat pour tools/analyze_fights.py (mesure, desactive par defaut)")
 		Print("  /duo status")

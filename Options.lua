@@ -485,13 +485,23 @@ Toggle(display, COL2, -230, "journal", "Journal de combat (pour l'analyse)",
 	.. "et lance le journal de combat du jeu (avance : positions). A lire avec tools/analyze_fights.py. "
 	.. "N'agit pas sur le jeu. /duo journal on|off, /duo journal : resume.")
 
+Header(display, COL2, -266, "Cone d'orientation du partenaire")
+Toggle(display, COL2, -284, "facingCone", "Cone aux pieds du partenaire",
+	"Desactive par defaut. Un cone jaune sous le partenaire montre vers ou il est tourne (le guerrier frappe ce qui "
+	.. "est devant lui, jusqu'a 90 degres de chaque cote). Accroche a sa barre de nom : les barres de nom amies "
+	.. "sont activees avec l'option (Maj+V pour les masquer), et Blizzard les bloque en donjon (pas de cone). "
+	.. "Angle estime : la camera doit etre derriere ton perso (faux pendant une rotation au clic gauche). "
+	.. "A activer seulement de ce cote ; DuoBox doit etre a jour sur les deux PC. /duo cone on|off, /duo cone debug.")
+Slider(display, COL2, -312, "coneHeight", "Hauteur de la pointe", 20, 300, 10, "%d%%",
+	"Plus : la pointe du cone descend. Moins : elle monte. A regler pour qu'elle tombe aux pieds du partenaire.")
+
 Header(display, 0, -200, "Detections de metiers sur la minimap")
 Toggle(display, 0, -218, "tracking", "Partager les detections (experimental)",
 	"A activer sur les deux persos. Lit les infobulles des vrais points jaunes puis affiche les reperes chez le partenaire. "
 	.. "GatherLite est requis pour scanner : ses emplacements connus guident le scan. "
 	.. "La minimap est deplacee brievement sous le curseur toutes les 5 s ; elle peut clignoter. "
 	.. "Pause en combat et pendant la rotation de camera. Les reperes expirent apres 15 s sans confirmation.")
-local trackingState = Note(display, 0, -250, 450)
+local trackingState = Note(display, 0, -250, 230) -- left column: the facing cone is on the right
 Button(display, 0, -290, 200, "Scanner maintenant", Run("tracking scan"),
 	"Lance un passage de verification si une detection de minerais ou de plantes est active.")
 

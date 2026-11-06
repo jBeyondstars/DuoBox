@@ -13,6 +13,7 @@ The diagram shows a few examples; see the [VoiceKeys setup and full command list
 - Cross-client alerts (low health, aggro, OOM, follow lost, quest item not looted) with sound and taskbar flash
 - Priest cast bar and facing hints on the hunter's screen
 - Warrior light (in range / facing / attacking) and event light (Overpower, Revenge, Execute... lit on the warrior) on the priest's screen
+- Optional facing cone (`/duo cone on`, off by default): a yellow cone under the partner's nameplate shows where the partner faces. Open world only (Blizzard locks friendly nameplates in dungeons); the angle assumes your camera is behind your character
 - Auto-accept invites, quests and resurrections from the partner; quest sharing and comparison
 - RestedXP: each objective also shows the partner's progress, and the guide waits until both are done
 - Options panel (`/duo` or the minimap button): every setting and action without typing commands
