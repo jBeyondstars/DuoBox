@@ -1,0 +1,23 @@
+{
+  "port": 47815,
+  "startEnabled": false,
+  "toggleKey": "CTRL-ALT-D",
+  "triggers": [
+    {
+      "name": "interact",
+      "label": "partner's target + interact key (like the pedal)",
+      "modifier": "CTRL",
+      "button": "LEFT",
+      "keys": "SHIFT-T, T"
+    }
+  ],
+  "delayMs": 300,
+  "minIntervalMs": 500,
+  "maxClickMovePx": 6,
+  "maxClickMs": 500,
+  "processNames": ["Wow", "WowB", "WowClassic", "WowClassicB"],
+  "overlay": true,
+  "overlayX": -1,
+  "overlayY": 2,
+  "sounds": false
+}

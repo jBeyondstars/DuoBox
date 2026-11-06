@@ -14,6 +14,9 @@ Everything is designed around **"one key press = one action in one game client"*
   "multi-window" AutoHotkey scripts, gaming keyboards targeting several clients…) or that automates actions.
   Simple rule: **1 key press = 1 action in 1 client**.
 - DuoBox follows this: it only raises alerts, never sends an action to the other client and never restarts follow by itself.
+  **One exception, outside the addon**: the optional DuoRelay tool ([section 7](#7-duorelay-ctrlclick-relayed-to-pc-2-optional-not-allowed-by-blizzard))
+  makes a Ctrl+click on PC 1 press keys in the client on PC 2. That is input broadcasting, which this policy
+  forbids. It is off unless you start it and switch it on.
 - Always check the official multiboxing policy of the realm type you play on.
 
 ## 1. Windows / screens
@@ -570,3 +573,61 @@ detection time; recovered events share the recovery time. No keys or game action
 In `commands.json`, `combatMonitor.enabled` turns the reader on/off and `combatMonitor.pollIntervalMs`
 sets the interval (100 ms by default, 50–5000 ms accepted). `Start-VoiceKeys-Vosk.bat --no-combat-monitor`
 disables it for one voice session. The Vosk `--selftest`, `--devices` and `--level` modes do not start it.
+
+## 7. DuoRelay: Ctrl+click relayed to PC 2 (optional, not allowed by Blizzard)
+> **Warning.** One click acting in two game clients is **input broadcasting**. Blizzard forbids it whatever the
+> transport: cable, local network or KVM switch. This is how ISBoxer worked across several PCs. Using it puts
+> **both accounts** at risk. It is not part of DuoBox's "1 key press = 1 action in 1 client" design (section 0).
+
+Two PCs on the same local network (Wi-Fi or Ethernet), priest on PC 1, warrior on PC 2. When the relay is ON,
+a **Ctrl+left click** in the priest's WoW window (on a mob or an NPC) targets it on the priest, as usual.
+DuoRelay then tells PC 2, which presses **Shift+T, then T** in the warrior's WoW, the same keys as the pedal:
+take the partner's target, then the interact key. The warrior walks to the mob and attacks it, or talks to the NPC.
+
+Folder `DuoBox\DuoRelay` (Windows PowerShell 5.1, nothing to install). Same folder and same `DuoRelay.json` on both PCs.
+
+**Setup (once)**
+1. PC 2: run `Setup-Firewall-PC2.bat`. It asks for PC 1's IP address (`ipconfig` on PC 1, "IPv4 Address" line).
+   Enter it, or press Enter to accept any PC on the local network. Windows then asks for administrator rights
+   to create the inbound rule `DuoRelay (UDP 47815)`.
+2. If Windows shows a "Windows Security Alert" for PowerShell the first time a script starts, click **Allow**.
+   "Cancel" creates a rule that blocks PowerShell, and the relay will not get through.
+
+**Each session**
+1. PC 2: run `Start-Relay-PC2.bat`. It shows PC 2's IP address. Then **click the warrior's WoW window**: keys are
+   only pressed while WoW is the foreground window.
+2. PC 1: run `Start-Relay-PC1.bat`. The first time, it asks for PC 2's address and saves it.
+   A small label at the top of the screen shows the state. It ignores the mouse and never takes the focus.
+3. **Ctrl+Alt+D** switches the relay ON / OFF. The relay is **OFF at start**.
+
+| Label (PC 1) | Meaning |
+|---|---|
+| `Relais PC 2 : OFF (CTRL+ALT+D)` | Nothing is relayed |
+| `Relais PC 2 : ON` | PC 2 answers and its WoW is the foreground window |
+| `Relais PC 2 : ON - PC 2 injoignable` | No answer: PC 2 script not started, firewall, wrong address |
+| `Relais PC 2 : ON - WoW pas actif sur PC 2` | Click the warrior's WoW window on PC 2 |
+| `Relais -> PC 2 : OK` | PC 2 pressed the keys |
+
+**What is relayed**
+- Only a real click in WoW on PC 1: Ctrl and no other modifier, released within 0.5 s, and the mouse moved
+  6 px at most. A camera turn (the cursor hides) is not relayed.
+- **Any** Ctrl+click in the WoW window counts, even on the interface (Ctrl+click on an item = dressing room)
+  or on the ground. In that case the warrior assists the priest's current target. Switch the relay OFF when you don't need it.
+- PC 2 waits `delayMs` (300 ms) before pressing the keys. The priest's new target has to reach the warrior's
+  client through the game server first, otherwise `/assist` takes the previous target. If the warrior takes
+  the old target, raise it to 400–500.
+- One action per `minIntervalMs` (0.5 s): a double click presses the keys once.
+
+**`DuoRelay.json`** (shared by both PCs; IP addresses go to `DuoRelay.local.json`, which is per PC and not in git)
+- `triggers`: list of `{ name, label, modifier, button, keys }`. `modifier`: `CTRL`, `ALT`, `SHIFT`, or a mix
+  such as `CTRL-SHIFT` (required). `button`: `LEFT`, `RIGHT`, `MIDDLE`, `X1`, `X2`. `keys`: same format as
+  VoiceKeys (`"SHIFT-T, T"`). Example: a second trigger `ALT` + `RIGHT` with other keys.
+- `toggleKey` (`CTRL-ALT-D`), `startEnabled` (`false`), `port` (`47815`; run the firewall setup again if you change it).
+- `delayMs`, `minIntervalMs`, `maxClickMovePx`, `maxClickMs`: timings above.
+- `overlay` (label on/off), `overlayX` (`-1` = centered), `overlayY`; `sounds` (beep on ON/OFF, `false` by default).
+- `processNames`: WoW executables that count as "WoW in the foreground".
+
+PC 2 only accepts messages from PC 1 (`pc1Address`) or, without it, from a private network address. Messages
+carry no password: anyone on your local network could make the warrior press the configured keys.
+
+Test without network or key press: `powershell -ExecutionPolicy Bypass -File DuoRelay\DuoRelay.ps1 -SelfTest`.

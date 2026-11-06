@@ -7,3 +7,6 @@ VoiceKeys/__pycache__/
 # Lua regression tests run through Python/lupa
 tests/__pycache__/
 tools/__pycache__/
+
+# DuoRelay: per-PC addresses written by the script
+DuoRelay/DuoRelay.local.json
