@@ -20,7 +20,7 @@ local KEYS = {
 	"autoInvite", "autoQuest", "autoShare", "autoRez", "autoNpc", "interactEnemy",
 	"turnin", "acceptAlert", "lootAlert", "frame", "bar", "barScale", "castbar", "combatMonitor",
 	"facing", "facingInvert", "facingDist", "rxp", "rxpHold", "minimap", "tracking", "dungeon",
-	"meleeLight", "lightSound", "procLight", "procOff",
+	"meleeLight", "lightSound", "procLight", "procOff", "pickupRelay",
 }
 -- Kept per character: who the partner and the tank are, this character's role, where its button sits
 -- and whether the combat journal (a measurement, Journal.lua) is recording

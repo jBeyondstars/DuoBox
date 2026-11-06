@@ -53,6 +53,7 @@ local defaults = {
 	procLight   = true,   -- partner's reactive spells (Overpower...) lit on this screen (ProcLight.lua)
 	procOff     = "",     -- spell IDs the event light does not show, "7384,5308" (Options > Alertes)
 	journal     = false,  -- combat journal for tools/analyze_fights.py, measurement only (Journal.lua)
+	pickupRelay = false,  -- DuoRelay Ctrl+right click: the partner picks up the same kind of object (PickupRelay.lua)
 }
 
 local DB

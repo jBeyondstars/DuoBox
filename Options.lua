@@ -393,6 +393,14 @@ Toggle(auto, 0, -18, "autoInvite", "Accepter ses invitations de groupe")
 Toggle(auto, 0, -42, "autoQuest", "Accepter les quetes qu'il partage")
 Toggle(auto, 0, -66, "autoRez", "Accepter ses resurrections")
 
+Header(auto, COL2, 0, "DuoRelay (deux PC)")
+Toggle(auto, COL2, -18, "pickupRelay", "Ramassage relaye (Ctrl + clic droit)",
+	"Desactive par defaut, a activer sur les deux persos, avec DuoRelay lance. Ctrl + clic droit sur un objet "
+	.. "(filon, plante, objet de quete) : le partenaire ne ramasse que si son objet le plus proche porte le meme nom. "
+	.. "Sinon il ne fait rien et ton ecran dit ce qu'il vise. Meme type d'objet, pas forcement le meme exemplaire. "
+	.. "Hors combat seulement. Utilise la touche Ctrl+Maj+F9 chez le partenaire (GUIDE.md, section 7).")
+	:HookScript("OnClick", function() if ns.RefreshPickupRelay then ns.RefreshPickupRelay() end end)
+
 Header(auto, 0, -104, "Quetes")
 Toggle(auto, 0, -122, "autoShare", "Partager automatiquement les quetes acceptees",
 	"Chaque quete prise est partagee au partenaire.")

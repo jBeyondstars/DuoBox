@@ -15,6 +15,7 @@ InteractPriority.lua
 Dungeon.lua
 MeleeLight.lua
 ProcLight.lua
+PickupRelay.lua
 Journal.lua
 Rotation.lua
 Profiles.lua

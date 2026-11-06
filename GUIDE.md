@@ -590,6 +590,23 @@ a **Ctrl+left click** in the priest's WoW window (on a mob or an NPC) targets it
 DuoRelay then tells PC 2, which presses **Shift+T, then T** in the warrior's WoW, the same keys as the pedal:
 take the partner's target, then the interact key. The warrior walks to the mob and attacks it, or talks to the NPC.
 
+A **Ctrl+right click** on an object (ore vein, herb, quest object...) interacts with it on the priest, as usual,
+and the warrior picks up **the same kind of object**. Needs the DuoBox option **Automatisme > DuoRelay > Ramassage
+relaye** on **both** characters (off by default):
+- An object cannot be targeted, and this client gives no identifier for the object under the mouse (checked in
+  game). The priest's DuoBox reads its **name** from the tooltip ("Copper Vein") and sends it to the warrior.
+- PC 2 presses **Ctrl+Shift+F9**, 0.5 s after the click (`delayMs` of the `pickup` trigger), so the name arrives first.
+  The warrior's DuoBox makes that key the interact key only while the warrior's own nearest object
+  (soft interact target, `SoftTargetInteract` 3, range 50) has the same name, for 3 s. Otherwise it does nothing.
+- The priest's screen says what happens: `<warrior> ramasse : Copper Vein`,
+  `<warrior> : pas de Copper Vein a portee (il vise : Peacebloom)`, `... est en combat`, or `... ne repond pas`
+  (option off on the warrior, or an old DuoBox).
+- Same kind, not the same object: with two veins side by side, the warrior may take the other one.
+  Out of combat only (key bindings cannot change in combat). Both games must use the same language (names).
+- If the warrior is out of range at first, it still picks up when the object comes in range within the 3 s, but
+  the key has already been pressed by then: Ctrl+right click again.
+- Ctrl+Shift+F9 must not be bound to anything else on the warrior. With the option off, it falls back to F9's binding.
+
 Folder `DuoBox\DuoRelay` (Windows PowerShell 5.1, nothing to install). Same folder and same `DuoRelay.json` on both PCs.
 
 **Setup (once)**
@@ -625,9 +642,10 @@ Folder `DuoBox\DuoRelay` (Windows PowerShell 5.1, nothing to install). Same fold
 - One action per `minIntervalMs` (0.5 s): a double click presses the keys once.
 
 **`DuoRelay.json`** (shared by both PCs; IP addresses go to `DuoRelay.local.json`, which is per PC and not in git)
-- `triggers`: list of `{ name, label, modifier, button, keys }`. `modifier`: `CTRL`, `ALT`, `SHIFT`, or a mix
+- `triggers`: list of `{ name, label, modifier, button, keys, delayMs }`. `modifier`: `CTRL`, `ALT`, `SHIFT`, or a mix
   such as `CTRL-SHIFT` (required). `button`: `LEFT`, `RIGHT`, `MIDDLE`, `X1`, `X2`. `keys`: same format as
-  VoiceKeys (`"SHIFT-T, T"`). Example: a second trigger `ALT` + `RIGHT` with other keys.
+  VoiceKeys (`"SHIFT-T, T"`). `delayMs` (optional): this trigger's wait, instead of the global one.
+  Default: `interact` (Ctrl+left, `SHIFT-T, T`) and `pickup` (Ctrl+right, `CTRL-SHIFT-F9` after 500 ms).
 - `toggleKey` (`CTRL-ALT-D`), `startEnabled` (`false`), `port` (`47815`; run the firewall setup again if you change it).
 - `delayMs`, `minIntervalMs`, `maxClickMovePx`, `maxClickMs`: timings above.
 - `overlay` (label on/off), `overlayX` (`-1` = centered), `overlayY`; `sounds` (beep on ON/OFF, `false` by default).

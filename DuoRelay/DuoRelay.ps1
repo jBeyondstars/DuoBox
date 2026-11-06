@@ -273,8 +273,10 @@ function ConvertTo-Trigger($t) {
         $mods += $Modifiers[$m]
     }
     if ($mods.Count -eq 0) { throw "Trigger '$name': a modifier is required, otherwise every click would be relayed" }
+    # Optional per-trigger wait on PC 2 (pickup: the addon's message has to arrive first)
+    $delay = if ($null -ne $t.delayMs) { [int]$t.delayMs } else { [int]$cfg.delayMs }
     return [pscustomobject]@{
-        name = $name; label = [string]$t.label; keys = [string]$t.keys; chords = (ConvertTo-Chords $t.keys)
+        name = $name; label = [string]$t.label; keys = [string]$t.keys; chords = (ConvertTo-Chords $t.keys); delayMs = $delay
         combo = ('{0}+{1} click' -f ([string]$t.modifier).ToUpper(), $button.ToLower())
         buttonVk = $MouseButtons[$button]; mods = $mods; state = @{ wasDown = $false; armed = $false }
     }
@@ -321,6 +323,7 @@ function Test-AllowedSender([Net.IPAddress]$addr) {
 
 $script:ForegroundOverride = $null   # self-test only
 $script:DryRun = $false              # self-test only: no key press
+$script:NoDelay = $false             # self-test only: no wait before the keys
 
 function Test-WowForeground {
     if ($null -ne $script:ForegroundOverride) { return $script:ForegroundOverride }
@@ -376,7 +379,7 @@ function Invoke-RelayPacket([string]$text, $state) {
         return New-RelayMessage $m.seq 'ACK' 'notfocused'
     }
     $state.lastFired = $now
-    if ([int]$cfg.delayMs -gt 0) { Start-Sleep -Milliseconds ([int]$cfg.delayMs) }
+    if ($t.delayMs -gt 0 -and -not $script:NoDelay) { Start-Sleep -Milliseconds $t.delayMs }
     if (-not $script:DryRun) { Send-Chords $t.chords }
     Write-Log ("{0,-12} -> {1}" -f $t.name, $t.keys) 'White'
     return New-RelayMessage $m.seq 'ACK' 'sent'
@@ -401,6 +404,7 @@ function Start-Sender {
              flashUntil = [long]0; flashText = ''; flashColor = $null; pending = @{}; seq = [long]0 }
     $toggleWasHeld = $false
     $lastPing = [long]-100000
+    $maxDelay = ($Triggers.Values | ForEach-Object { $_.delayMs } | Measure-Object -Maximum).Maximum
     $cx = 0; $cy = 0
 
     $overlay = $null
@@ -473,7 +477,7 @@ function Start-Sender {
 
             # No answer: PC 2 down, firewall, wrong address
             foreach ($k in @($st.pending.Keys)) {
-                if ($now - $st.pending[$k] -gt 2000 + [int]$cfg.delayMs) {
+                if ($now - $st.pending[$k] -gt 2000 + $maxDelay) {
                     $st.pending.Remove($k)
                     Write-Log '  PC 2 did not answer.' 'Red'
                     & $flash 'Relais : pas de reponse de PC 2' ([Drawing.Color]::Tomato) 2500
@@ -522,7 +526,7 @@ function Start-Receiver {
     if (-not (Get-NetFirewallRule -DisplayName $RuleName -ErrorAction SilentlyContinue)) {
         Write-Log "No firewall rule '$RuleName': run Setup-Firewall-PC2.bat once, or PC 1's messages may be blocked." 'Yellow'
     }
-    foreach ($t in $Triggers.Values) { Write-Log ("  {0}: presses {1} ({2})" -f $t.name, $t.keys, $t.label) 'Cyan' }
+    foreach ($t in $Triggers.Values) { Write-Log ("  {0}: presses {1} after {2} ms ({3})" -f $t.name, $t.keys, $t.delayMs, $t.label) 'Cyan' }
     Write-Log 'Click the WoW window now: keys are only pressed while WoW is the foreground window. Ctrl+C to quit.' 'Cyan'
 
     try {
@@ -632,9 +636,14 @@ function Invoke-SelfTest {
     Check (-not (Test-AllowedSender ([Net.IPAddress]::Parse('192.168.1.6')))) 'pc1Address set: other PCs refused'
     $cfg.pc1Address = $saved
 
-    # Loopback: PC 1 socket -> PC 2 socket -> reply, no key pressed
+    # Per-trigger delay: its own delayMs, or the global one
+    $own = ConvertTo-Trigger ([pscustomobject]@{ name = 'a'; button = 'RIGHT'; modifier = 'CTRL'; keys = 'T'; delayMs = 500 })
+    $inherit = ConvertTo-Trigger ([pscustomobject]@{ name = 'b'; button = 'LEFT'; modifier = 'CTRL'; keys = 'T' })
+    Check ($own.delayMs -eq 500 -and $inherit.delayMs -eq [int]$cfg.delayMs) 'trigger delay: its own, else the global one'
+
+    # Loopback: PC 1 socket -> PC 2 socket -> reply, no key pressed, no wait
     $script:DryRun = $true
-    $cfg.delayMs = 0
+    $script:NoDelay = $true
     $loop = [Net.IPAddress]::Loopback
     $rx = New-RelaySocket $loop 0; $tx = New-RelaySocket $loop 0
     $rx.Client.ReceiveTimeout = 2000; $tx.Client.ReceiveTimeout = 2000
@@ -664,7 +673,7 @@ function Invoke-SelfTest {
         Check $false ("loopback: {0}" -f $_.Exception.Message)
     } finally {
         $rx.Close(); $tx.Close()
-        $script:ForegroundOverride = $null; $script:DryRun = $false
+        $script:ForegroundOverride = $null; $script:DryRun = $false; $script:NoDelay = $false
     }
 
     if ($script:failures) { Write-Log ("Self-test: {0} failure(s)." -f $script:failures) 'Red'; exit 1 }

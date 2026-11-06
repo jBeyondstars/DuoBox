@@ -9,6 +9,14 @@
       "modifier": "CTRL",
       "button": "LEFT",
       "keys": "SHIFT-T, T"
+    },
+    {
+      "name": "pickup",
+      "label": "same kind of object as the priest's (DuoBox option 'Ramassage relaye' on both)",
+      "modifier": "CTRL",
+      "button": "RIGHT",
+      "keys": "CTRL-SHIFT-F9",
+      "delayMs": 500
     }
   ],
   "delayMs": 300,
