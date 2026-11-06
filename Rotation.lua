@@ -14,6 +14,9 @@
 -- Blizzard's secure "attribute" action, the only way to change it in combat,
 -- until the end of the fight (pressed out of combat: for the next fight, until
 -- its end); its right-click goes back to single target.
+-- The game runs only the first 255 characters of a button's macro (measured in game on
+-- 2026-11-06: with 4 "once per fight" lines, Overpower and Heroic Strike were never tried).
+-- A longer macro moves its "once per fight" lines to hidden buttons it /clicks first.
 -- Kept out of DuoBox.lua: its main chunk is close to Lua 5.1's 200 locals.
 --------------------------------------------------------------------------------
 
@@ -21,6 +24,8 @@ local _, ns = ...
 
 local REFRESH = 30 -- seconds left under which a "once per fight" buff counts as missing
 local MAX_STEPS = 10
+local MAX_LEN = 255 -- characters of a button's macro the game runs, the rest is dropped
+local ONCE_BUTTON = "DuoBoxRotOnce" -- + number: hidden buttons running the "once per fight" lines
 local BATTLE_SHOUT = 6673
 local QUESTION = "Interface\\Icons\\INV_Misc_QuestionMark"
 -- Default list of each class (empty for the others). Warrior: Battle Shout once per fight,
@@ -68,28 +73,66 @@ local function Usable(s, aoe)
 	return not s.off and ns.Known(s.id) and (ns.SpellNameIcon(s.id)) or nil
 end
 
+-- Lines of the macro, in two parts: the "once per fight" buffs to cast, then the target, the
+-- attack and the "each press" spells. all = true: every buff, as if missing (longest macro).
 -- fight = true: built on PLAYER_REGEN_DISABLED and kept for the whole fight. A plain /cast of
 -- a buff would then fire on every press: /castsequence casts it once, and "null" (no such
 -- spell) holds the sequence until reset=combat, at the end of the fight. Both modes share
 -- the same line, so switching to multi target does not shout twice.
-local function Macro(fight, aoe)
-	local lines = {}
+local function Lines(fight, aoe, all)
+	local once, main = {}, {}
 	for _, s in ipairs(Steps()) do
-		local name = s.once and needed[s.id] and Usable(s, aoe)
+		local name = s.once and (all or needed[s.id]) and Usable(s, aoe)
 		if name then
-			lines[#lines + 1] = fight and ("/castsequence reset=combat %s, null"):format(name) or ("/cast " .. name)
+			once[#once + 1] = fight and ("/castsequence reset=combat %s, null"):format(name) or ("/cast " .. name)
 		end
 	end
 	-- Keep your own live enemy target, otherwise take the partner's (the tank's in dungeon mode)
-	lines[#lines + 1] = "/assist [noharm][dead] " .. ns.AssistUnit()
-	lines[#lines + 1] = "/stopmacro [noharm][dead]"
-	lines[#lines + 1] = ((ns.STOP_FOLLOW .. (ATTACK[Class()] or "")):gsub("\n$", ""))
+	main[1] = "/assist [noharm][dead] " .. ns.AssistUnit()
+	main[2] = "/stopmacro [noharm][dead]"
+	main[3] = ((ns.STOP_FOLLOW .. (ATTACK[Class()] or "")):gsub("\n$", ""))
 	for _, s in ipairs(Steps()) do
 		local name = not s.once and Usable(s, aoe)
-		if name then lines[#lines + 1] = "/cast " .. name end
+		if name then main[#main + 1] = "/cast " .. name end
 	end
-	return table.concat(lines, "\n")
+	return once, main
 end
+
+-- Lines joined into texts of MAX_LEN characters at most
+local function Pack(lines)
+	local texts = {}
+	for _, line in ipairs(lines) do
+		local last = texts[#texts]
+		if last and #last + 1 + #line <= MAX_LEN then
+			texts[#texts] = last .. "\n" .. line
+		else
+			texts[#texts + 1] = line
+		end
+	end
+	return texts
+end
+
+-- The Rotation macro. Over MAX_LEN characters the game would drop its last lines, the attacks
+-- (Heroic Strike first): its "once per fight" lines then go to hidden buttons it /clicks first,
+-- in the same order. hidden: texts of those buttons by number, filled here; share it between
+-- both modes so that the same lines get the same button.
+local function Build(fight, aoe, hidden, all)
+	local once, main = Lines(fight, aoe, all)
+	local text = table.concat(once, "\n") .. (#once > 0 and "\n" or "") .. table.concat(main, "\n")
+	if #text <= MAX_LEN or #once == 0 then return text end
+	local clicks = {}
+	for _, part in ipairs(Pack(once)) do
+		local n = #hidden + 1
+		for i, t in ipairs(hidden) do
+			if t == part then n = i end
+		end
+		hidden[n] = part
+		clicks[#clicks + 1] = "/click " .. ONCE_BUTTON .. n
+	end
+	return table.concat(clicks, "\n") .. "\n" .. table.concat(main, "\n")
+end
+
+local function Macro(fight, aoe) return Build(fight, aoe, {}) end
 
 -- Icon of the next action: a buff still to cast, otherwise the first attack of the list
 local function Icon(aoe)
@@ -130,12 +173,33 @@ local function SetIfChanged(frame, key, value)
 	if frame:GetAttribute(key) ~= value then frame:SetAttribute(key, value) end
 end
 
+local hiddenButtons = {} -- [number] = hidden button of the "once per fight" lines (Build)
+
+-- Out of combat only: secure buttons and their attributes
+local function SetHidden(texts)
+	for n, text in ipairs(texts) do
+		local b = hiddenButtons[n]
+		if not b then
+			-- Not anchored: never drawn nor under the mouse, /click still reaches it
+			b = CreateFrame("Button", ONCE_BUTTON .. n, UIParent, "SecureActionButtonTemplate")
+			b:SetAttribute("type", "macro")
+			-- /click sends a release (down = false): act on it whatever ActionButtonUseKeyDown says
+			b:SetAttribute("useOnKeyDown", false)
+			b:RegisterForClicks("AnyUp")
+			hiddenButtons[n] = b
+		end
+		SetIfChanged(b, "macrotext", text)
+	end
+end
+
 -- ended = true on PLAYER_REGEN_ENABLED: the multi-target mode stops with the fight
 local function Update(fight, ended)
 	if not button or InCombatLockdown() then return end
 	-- Multi pressed out of combat: kept for the next fight, until its end
 	local armed = not ended and MultiActive()
-	local single, aoe = Macro(fight, false), Macro(fight, true)
+	local hidden = {}
+	local single, aoe = Build(fight, false, hidden), Build(fight, true, hidden)
+	SetHidden(hidden)
 	local text = armed and aoe or single
 	-- Compared with the attribute, not a copy: the Multi button changes it
 	if button:GetAttribute("macrotext") ~= text then
@@ -552,7 +616,7 @@ local function CreatePanel()
 end
 
 local function Count(text)
-	return #text > 255 and ("|cffff8040%d car.|r"):format(#text) or ("%d car."):format(#text)
+	return #text > MAX_LEN and ("|cffff8040%d car.|r"):format(#text) or ("%d car."):format(#text)
 end
 
 RefreshPanel = function()
@@ -583,14 +647,21 @@ RefreshPanel = function()
 	panel.edit:ClearAllPoints(); panel.edit:SetPoint("TOPLEFT", 181, y - 1)
 	panel.add:ClearAllPoints(); panel.add:SetPoint("TOPLEFT", 340, y)
 
-	local single, aoe = Macro(false, false), Macro(false, true)
+	local hidden = {}
+	local single, aoe = Build(false, false, hidden), Build(false, true, hidden)
+	-- The limit applies to the macro of a fight with every buff missing, the longest one
+	local fightHidden = {}
+	local longest = math.max(#Build(true, false, fightHidden, true), #Build(true, true, fightHidden, true))
 	y = y - 28
 	panel.reset:ClearAllPoints(); panel.reset:SetPoint("TOPLEFT", 15, y)
 	panel.status:ClearAllPoints(); panel.status:SetPoint("TOPLEFT", 135, y - 5)
 	panel.status:SetText(InCombatLockdown() and "|cffffd040En combat : changements appliques a la fin du combat.|r"
 		or #steps == 0 and ("|cff999999Liste vide : le bouton %s seulement.|r"):format(
 			ATTACK[Class()] == "/startattack" and "attaque en auto" or ATTACK[Class()] and "envoie le familier" or "prend la cible")
-		or math.max(#single, #aoe) > 255 and "|cffff8040Macro de plus de 255 caracteres : verifie en jeu que les derniers sorts partent.|r"
+		or longest > MAX_LEN and ("|cffff8040Macro de combat : %d car., le jeu n'en lit que %d : "
+			.. "les derniers sorts sautent. Retire un sort.|r"):format(longest, MAX_LEN)
+		or #fightHidden > 0 and ("|cff999999Sorts 1x par combat lances par un bouton cache (/click), "
+			.. "la macro de combat depassant %d car.|r"):format(MAX_LEN)
 		or "")
 
 	y = y - 32

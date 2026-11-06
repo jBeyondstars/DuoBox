@@ -192,6 +192,12 @@ The list is saved per character, for its class (10 spells at most):
   warrior, and empties the list for the other classes.
 - The bottom of the panel shows both macros, single and multi target. Changes made in combat apply at the end of the
   fight.
+- **255 characters**: the game runs only the first 255 characters of a button's macro and silently drops the rest,
+  i.e. the last attacks of the list (measured on 2026-11-06: with four "once per fight" spells, the fight macro
+  reached 287 characters and Heroic Strike was never cast). In a fight each "once per fight" spell takes a whole
+  `/castsequence` line, so when the macro would be too long these lines move to hidden buttons that the Rotation
+  macro runs first with `/click` (same order); the panel says so in grey. If the attacks alone are still too long,
+  the panel warns in orange: remove a spell.
 
 ### Partner cast bar (leader screen)
 Yellow while casting, blue for an instant spell, green on success, red when interrupted / failed.

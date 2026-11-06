@@ -172,6 +172,69 @@ class RotationTest(unittest.TestCase):
             assert(macro() == SINGLE)
         ''')
 
+    def test_long_fight_macro_moves_the_buffs_to_a_hidden_button(self):
+        # The warrior's list of 2026-11-06: 287 characters in a fight, the game ran only the first 255
+        self.load('''
+            SPELLS[1259813] = {"Eureka!"}; SPELLS[6546] = {"Rend"}; known[1259813] = true; known[6546] = true
+            buffs["Battle Shout"] = 0
+            db.rotation, db.rotationClass = {{id = 6673, once = true}, {id = 2687, once = true},
+                {id = 1259813, once = true}, {id = 6343, when = "aoe"}, {id = 7384}, {id = 78},
+                {id = 6546, once = true}}, "WARRIOR"
+        ''')
+        self.run_lua('''
+            local AOE = ATTACK .. "/cast Thunder Clap\\n/cast Overpower\\n/cast Heroic Strike"
+            assert(macro() == "/cast Battle Shout\\n/cast Bloodrage\\n/cast Eureka!\\n/cast Rend\\n" .. SINGLE, macro())
+            event("PLAYER_REGEN_DISABLED")
+            assert(macro() == "/click DuoBoxRotOnce1\\n" .. SINGLE, macro())
+            assert(aoe() == "/click DuoBoxRotOnce1\\n" .. AOE, aoe()) -- same lines, same button
+            local hidden = DuoBoxRotOnce1.attrs
+            assert(hidden.type == "macro" and hidden.useOnKeyDown == false)
+            assert(hidden.macrotext == "/castsequence reset=combat Battle Shout, null\\n"
+                .. "/castsequence reset=combat Bloodrage, null\\n/castsequence reset=combat Eureka!, null\\n"
+                .. "/castsequence reset=combat Rend, null", hidden.macrotext)
+            lockdown = true; pressMulti(); tick()
+            assert(macro() == aoe() and button.glow.shown)
+            lockdown = false; event("PLAYER_REGEN_ENABLED")
+            -- Battle Shout still up at the next pull: short enough, the lines stay in the macro
+            buffs["Battle Shout"] = 100; tick()
+            event("PLAYER_REGEN_DISABLED")
+            assert(lines()[1] == "/castsequence reset=combat Bloodrage, null" and #macro() <= 255, macro())
+            assert(not macro():find("/click") and macro():find("/cast Heroic Strike$"))
+            lockdown = false; event("PLAYER_REGEN_ENABLED")
+            ns.ToggleRotation()
+            assert(DuoBoxRotation.status.value:find("bouton cache"), DuoBoxRotation.status.value)
+        ''')
+
+    def test_buff_lines_are_split_over_several_hidden_buttons(self):
+        self.load('''
+            db.rotation, db.rotationClass = {{id = 78}}, "WARRIOR"
+            for id = 1, 6 do
+                SPELLS[id] = {"Long buff name number " .. id}; known[id] = true
+                table.insert(db.rotation, {id = id, once = true})
+            end
+        ''')
+        self.run_lua('''
+            event("PLAYER_REGEN_DISABLED")
+            assert(lines()[1] == "/click DuoBoxRotOnce1" and lines()[2] == "/click DuoBoxRotOnce2", macro())
+            assert(macro():find("/cast Heroic Strike$") and #macro() <= 255)
+            local first, second = DuoBoxRotOnce1.attrs.macrotext, DuoBoxRotOnce2.attrs.macrotext
+            assert(#first <= 255 and #second <= 255)
+            assert((first .. "\\n" .. second):find("number 1, null.*number 6, null$"), first .. second)
+        ''')
+
+    def test_panel_warns_when_the_attacks_alone_are_too_long(self):
+        self.load('''
+            db.rotation, db.rotationClass = {}, "WARRIOR"
+            for id = 1, 7 do
+                SPELLS[id] = {"Very long attack name number " .. id}; known[id] = true
+                db.rotation[id] = {id = id}
+            end
+        ''')
+        self.run_lua('''
+            ns.ToggleRotation()
+            assert(DuoBoxRotation.status.value:find("le jeu n'en lit que 255"), DuoBoxRotation.status.value)
+        ''')
+
     def test_buff_ending_soon_counts_as_missing(self):
         self.load('buffs["Battle Shout"] = 20')
         self.run_lua('assert(lines()[1] == "/cast Battle Shout")')
