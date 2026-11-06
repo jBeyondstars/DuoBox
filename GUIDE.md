@@ -228,6 +228,26 @@ range, **red** with the reason = **TROP LOIN** (too far), **MAL ORIENTE** (facin
   range source, last errors) — useful if the light stays green when it should not.
 - On by default on both characters, `/duo light off` or the Display tab to hide it.
 
+### Event light (priest screen)
+The icon of a reactive spell of the partner as soon as the game lights it up on the partner's client, so you press
+the partner's key (pedal) in time; it disappears as soon as the spell goes out again (5 s window over, spell used,
+target dead, end of the fight).
+- Spells: warrior **Overpower** (after a dodge), **Revenge** (after a block, dodge or parry), **Execute** (target under
+  20 % health); rogue Riposte; hunter Counterattack and Mongoose Bite; paladin Hammer of Wrath. Only the learned ones.
+- **Gold and pulsing** = ready. **Grey** with "pas assez de rage" = lit but not enough rage (energy, mana) yet. Several
+  lit at once: the first one of the list above is shown big, the others are written under the light.
+- Choose the spells in the Alerts tab ("Voyant des evenements du partenaire"): one checkbox per spell of the partner's
+  class (the partner must be in the group for the panel to know its class). Saved in profiles.
+- How: every 0.1 s, during a fight, the partner's client asks the game whether each spell is usable (or only short of
+  rage), glowing, and not on its own cooldown (the global cooldown is ignored), then sends the change at once on its
+  own addon prefix. The game hides the combat log and the auras in combat from addons on this client, so buffs such as
+  Clearcasting cannot be shown.
+- Move and resize: like the warrior light (`/duo move`, bottom-right corner); `/duo proc reset`: default place and size.
+- `/duo proc debug` on the warrior, during a fight: what the client answers for each spell (usable, short of rage,
+  glow, cooldown) and what it sent; on the priest: the last state received.
+- On by default on both characters (both need it: the warrior's client detects, the priest's displays),
+  `/duo proc off` or the checkbox in the Alerts tab to hide it. No sound.
+
 ### Combat journal (measurement, off by default)
 To measure what really costs the warrior time in hard fights (several enemies that move) before changing anything.
 `/duo journal on`, or **Journal de combat** in the Display tab, on the warrior (and on the priest to also count its
@@ -293,8 +313,8 @@ To verify in game, stand near a visible yellow resource dot, enable sharing on b
 gathering character, and check the counters and the other minimap. Repeat after switching to the other window.
 
 ### Moving and resizing
-`/duo move` shows the cast bar and the facing text with sample content so you can drag them;
-the bottom-right corner of the cast bar resizes it. Type `/duo move` again to save.
+`/duo move` shows the cast bar, the facing text, the warrior light and the event light with sample content so you can drag them;
+the bottom-right corner of the cast bar (or of a light) resizes it. Type `/duo move` again to save.
 
 ### Key bindings
 Gear button at the end of the bar, or `/duo keys`. Click a row, then press a key

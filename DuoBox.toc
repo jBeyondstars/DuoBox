@@ -14,6 +14,7 @@ PartnerTracking.lua
 InteractPriority.lua
 Dungeon.lua
 MeleeLight.lua
+ProcLight.lua
 Journal.lua
 Rotation.lua
 Profiles.lua

@@ -50,6 +50,8 @@ local defaults = {
 	tank        = nil,    -- tank name for the dungeon mode (nil = the group member with the Tank role)
 	meleeLight  = true,   -- warrior range / facing light on the partner's screen (MeleeLight.lua)
 	lightSound  = false,  -- optional sound while the light stays red (Options > Alertes)
+	procLight   = true,   -- partner's reactive spells (Overpower...) lit on this screen (ProcLight.lua)
+	procOff     = "",     -- spell IDs the event light does not show, "7384,5308" (Options > Alertes)
 	journal     = false,  -- combat journal for tools/analyze_fights.py, measurement only (Journal.lua)
 }
 
@@ -160,10 +162,11 @@ local function SelfTag()
 	return ns.tag
 end
 
-local function SendComm(msg)
+-- prefix: another registered prefix has its own addon message budget (ProcLight.lua)
+local function SendComm(msg, prefix)
 	if not IsInGroup() then return end
 	local send = (C_ChatInfo and C_ChatInfo.SendAddonMessage) or SendAddonMessage
-	if send then return send(PREFIX, "~" .. SelfTag() .. "~" .. msg, "PARTY") end
+	if send then return send(prefix or PREFIX, "~" .. SelfTag() .. "~" .. msg, "PARTY") end
 end
 
 -- Message without its tag when it comes from the partner, nil otherwise (own echo, other players)
@@ -673,7 +676,7 @@ local function ToggleMoveMode()
 		cast:Show()
 		facingFrame.text:SetText("|cffff4040<<<  Pretre : GAUCHE 90°|r")
 		facingFrame:Show()
-		Print("mode deplacement : glisse la barre de cast, le texte d'orientation et le voyant du guerrier, coin bas-droit de la barre pour la redimensionner. |cffffd040/duo move|r pour terminer.")
+		Print("mode deplacement : glisse la barre de cast, le texte d'orientation et les voyants, coin bas-droit de la barre ou d'un voyant pour le redimensionner. |cffffd040/duo move|r pour terminer.")
 	else
 		cast:Hide()
 		facingFrame:Hide()
@@ -2353,6 +2356,7 @@ local function Set(key, value)
 		if ns.UpdateMinimapButton then ns.UpdateMinimapButton() end
 	end
 	if key == "meleeLight" and ns.RefreshMeleeLight then ns.RefreshMeleeLight() end
+	if (key == "procLight" or key == "procOff") and ns.RefreshProcLight then ns.RefreshProcLight() end
 	if key == "journal" and ns.RefreshJournal then ns.RefreshJournal() end
 	if key == "rotation" and ns.RotationChanged then ns.RotationChanged() end -- loaded by a profile
 	if (key == "tracking" or key == "partner") and ns.RefreshTracking then
@@ -2375,7 +2379,7 @@ local function OnOff(key, arg)
 	Print(("%s = %s"):format(key, DB[key] and "|cff40ff40on|r" or "|cffff4040off|r"))
 end
 
-local toggles = { sound = "sound", flash = "flash", invite = "autoInvite", quest = "autoQuest", share = "autoShare", rez = "autoRez", frame = "frame", bar = "bar", castbar = "castbar", autonpc = "autoNpc", turnin = "turnin", accept = "acceptAlert", loot = "lootAlert", minimap = "minimap", light = "meleeLight", lightsound = "lightSound" }
+local toggles = { sound = "sound", flash = "flash", invite = "autoInvite", quest = "autoQuest", share = "autoShare", rez = "autoRez", frame = "frame", bar = "bar", castbar = "castbar", autonpc = "autoNpc", turnin = "turnin", accept = "acceptAlert", loot = "lootAlert", minimap = "minimap", light = "meleeLight", lightsound = "lightSound", proc = "procLight" }
 
 local function Command(input)
 	local cmd, arg = (input or ""):match("^%s*(%S*)%s*(.-)%s*$")
@@ -2417,6 +2421,12 @@ local function Command(input)
 		Print(("echelle de la barre = %.2f%s"):format(DB.barScale, InCombatLockdown() and " (appliquee a la sortie du combat)" or ""))
 	elseif cmd == "light" and (arg:lower() == "debug" or arg:lower() == "reset") then
 		ns.MeleeLightCommand(arg:lower())
+	elseif cmd == "proc" and (arg:lower() == "debug" or arg:lower() == "reset") then
+		if ns.ProcLightCommand then
+			ns.ProcLightCommand(arg:lower())
+		else -- ProcLight.lua added to the .toc while the game was running
+			Print("ProcLight.lua n'est pas charge : redemarre completement le jeu.")
+		end
 	elseif toggles[cmd] then
 		OnOff(toggles[cmd], arg:lower())
 	elseif cmd == "facing" then
@@ -2501,6 +2511,7 @@ local function Command(input)
 		Print("  /duo sound|flash|invite|quest|share|rez|frame|castbar|autonpc|turnin|accept|loot|minimap [on|off]")
 		Print("  /duo light [on|off|debug|reset] - voyant vert / rouge du guerrier chez le partenaire (/duo move : deplacer, coin : taille)")
 		Print("  /duo lightsound [on|off] - son optionnel quand le voyant reste rouge (desactive par defaut)")
+		Print("  /duo proc [on|off|debug|reset] - voyant des evenements : Fulgurance, Execution... du partenaire (sorts : onglet Alertes)")
 		Print("  /duo profile [save|load|delete <nom>] - profils de reglages, communs aux persos du compte (seul : la liste)")
 		Print("  /duo journal [on|off|clear|cvars] - journal de combat pour tools/analyze_fights.py (mesure, desactive par defaut)")
 		Print("  /duo status")

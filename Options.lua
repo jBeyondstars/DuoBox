@@ -10,7 +10,7 @@ local _, ns = ...
 local function DB() return ns.GetDB() end
 local Print = ns.Print
 
-local WIDTH, HEIGHT = 540, 420
+local WIDTH, HEIGHT = 540, 460
 local TABS = 6
 local COL2 = 240 -- x of the second column, inside a page
 
@@ -277,9 +277,9 @@ Button(general, 0, -242, BW, "Inviter le partenaire", function() DuoBoxBtnInvite
 Button(general, COL2 - 6, -242, BW, "Comparer les quetes", function() DuoBoxBtnQuests:Click() end,
 	"Partage tes quetes qui manquent au partenaire.")
 local moveBtn = Button(general, 0, -268, BW, "", Run("move"),
-	"Affiche la barre de cast, l'orientation et le voyant du guerrier pour les deplacer (coin bas-droit : taille). Recliquer pour enregistrer.")
+	"Affiche la barre de cast, l'orientation et les voyants pour les deplacer (coin bas-droit : taille). Recliquer pour enregistrer.")
 moveBtn.Refresh = function(self)
-	self:SetText(ns.IsMoveMode() and "|cffffd040Terminer le deplacement|r" or "Deplacer cast / orientation / voyant")
+	self:SetText(ns.IsMoveMode() and "|cffffd040Terminer le deplacement|r" or "Deplacer cast / orientation / voyants")
 end
 controls[#controls + 1] = moveBtn
 Button(general, COL2 - 6, -268, BW, "Afficher l'etat dans le chat", Run("status"),
@@ -328,6 +328,59 @@ Header(alerts, COL2, -176, "Voyant du guerrier")
 Toggle(alerts, COL2, -194, "lightSound", "Son quand il reste rouge",
 	"Optionnel, desactive par defaut. Apres 1 s de rouge, puis toutes les 3 s : un son different pour trop loin, "
 	.. "mal oriente, et n'attaque pas / sans cible. Suit aussi l'option Son. /duo lightsound on|off")
+
+-- Event light (ProcLight.lua): the partner's reactive spells, one checkbox per spell of its class
+Header(alerts, 0, -236, "Voyant des evenements du partenaire")
+Toggle(alerts, 0, -254, "procLight", "Afficher le voyant",
+	"L'icone du sort s'affiche des qu'il s'allume chez le partenaire (Fulgurance apres une esquive, Execution "
+	.. "sous 20 %...) et disparait des qu'il s'eteint : fenetre finie, sort lance, cible morte, fin du combat. "
+	.. "Doree et clignotante : pret. Grise : pas assez de rage. A laisser actif sur les deux persos. "
+	.. "Deplacer : bouton Deplacer (ou /duo move), coin bas-droit : taille. /duo proc on|off, "
+	.. "/duo proc debug (sur le guerrier, en combat) : ce que le client repond.")
+local procNote = Note(alerts, COL2, -260, 256)
+local procBoxes, procRows = {}, 0
+for _, list in pairs(ns.PROCS or {}) do procRows = math.max(procRows, #list) end
+for i = 1, procRows do
+	local cb = CheckBox(alerts, 16, -282 - (i - 1) * 24, "")
+	cb:SetScript("OnClick", function(self) ns.SetProcHidden(self.id, not self:GetChecked()) end)
+	cb:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText(self.label:GetText())
+		GameTooltip:AddLine("Coche : le voyant s'allume pour ce sort. Decoche : ignore.", 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	cb:SetScript("OnLeave", GameTooltip_Hide)
+	cb:Hide()
+	procBoxes[i] = cb
+end
+local CLASS_FR = { WARRIOR = "guerrier", ROGUE = "voleur", HUNTER = "chasseur", PALADIN = "paladin",
+	PRIEST = "pretre", MAGE = "mage", WARLOCK = "demoniste", DRUID = "druide", SHAMAN = "chaman" }
+
+-- The spells of the partner's class (the partner must be in the group: its class comes from its unit)
+local function RefreshProcs()
+	local unit = ns.PartnerUnit()
+	local name = unit and SecretFree(UnitName(unit))
+	local class = unit and SecretFree((select(2, UnitClass(unit))))
+	local list = class and ns.PROCS[class]
+	if not unit then
+		procNote:SetText("|cff999999Partenaire hors du groupe : les sorts de sa classe s'afficheront ici.|r")
+	elseif not list then
+		procNote:SetText(("|cff999999%s (%s) n'a pas de sort evenement connu.|r"):format(name or "Le partenaire",
+			CLASS_FR[class] or "?"))
+	else
+		procNote:SetText(("Sorts de %s (%s) a signaler :"):format(name or "partenaire", CLASS_FR[class] or class))
+	end
+	for i, cb in ipairs(procBoxes) do
+		local p = list and list[i]
+		cb:SetShown(p ~= nil)
+		if p then
+			cb.id = p.id
+			cb.label:SetText(("%s |cff999999(%s)|r"):format(ns.SpellNameIcon(p.id) or p.id, p.hint))
+			cb:SetHitRectInsets(0, -(cb.label:GetStringWidth() + 4), 0, 0)
+			cb:SetChecked(not ns.ProcHidden(p.id))
+		end
+	end
+end
 
 --------------------------------------------------------------------------------
 -- Page 3: Automation
@@ -409,7 +462,7 @@ Slider(display, COL2, -74, "facingDist", "Distance chasseur - cible", 5, 40, 1, 
 Button(display, COL2, -118, 200, "Diagnostic orientation", Run("facing debug"),
 	"Affiche dans le chat les valeurs que le client peut lire.")
 local moveBtn2 = Button(display, COL2, -144, 200, "", Run("move"),
-	"Affiche la barre de cast, l'orientation et le voyant du guerrier pour les deplacer (coin bas-droit : taille). Recliquer pour enregistrer.")
+	"Affiche la barre de cast, l'orientation et les voyants pour les deplacer (coin bas-droit : taille). Recliquer pour enregistrer.")
 moveBtn2.Refresh = moveBtn.Refresh
 controls[#controls + 1] = moveBtn2
 Toggle(display, COL2, -174, "meleeLight", "Voyant du guerrier (portee / orientation)",
@@ -592,6 +645,7 @@ local function RefreshLive()
 	rxpState:SetText(ns.RXPState and ("Etat : " .. ns.RXPState()) or "")
 	trackingState:SetText(ns.TrackingState and ns.TrackingState() or "")
 	dungeonState:SetText(ns.DungeonStatus and ns.DungeonStatus() or "")
+	RefreshProcs()
 	local active, changed = ns.ActiveProfile()
 	profState:SetText(not active and "Aucun profil actif sur ce perso."
 		or changed and ("Profil actif : |cffffd040%s|r, |cffff9933modifie depuis|r : Enregistrer pour le mettre a jour."):format(active)
