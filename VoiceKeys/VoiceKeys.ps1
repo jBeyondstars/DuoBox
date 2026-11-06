@@ -2,10 +2,11 @@
 <#
     VoiceKeys: a tiny "VoiceAttack" for DuoBox.
     Recognizes a closed list of phrases (Windows offline speech engine)
-    and presses ONE key per phrase in the foreground window.
+    and presses the phrase's key in the foreground window.
 
     Compliance rules, hard-coded on purpose:
-      - 1 phrase = 1 key (+ modifiers), never a sequence or a loop;
+      - 1 phrase = 1 key (+ modifiers), or a short fixed list written in
+        commands.json ("SHIFT-T, T"), sent once; never a loop or a repeat;
       - the key only goes to the active window of THIS PC (SendInput),
         never to a background window or another machine;
       - by default nothing is sent unless WoW is the foreground window.
@@ -112,6 +113,20 @@ function Send-Chord($chord) {
     [array]::Reverse($chord.mods)
 }
 
+# "SHIFT-T, T" -> two chords pressed one after the other
+function ConvertTo-Chords([string]$key) {
+    $parts = @($key -split ',' | ForEach-Object { $_.Trim() })
+    if ($parts -contains '') { throw "Empty key in '$key'" }
+    return ,@($parts | ForEach-Object { ConvertTo-Chord $_ })
+}
+
+function Send-Chords($chords) {
+    for ($i = 0; $i -lt $chords.Count; $i++) {
+        if ($i) { Start-Sleep -Milliseconds 50 }  # lets WoW handle the previous key first
+        Send-Chord $chords[$i]
+    }
+}
+
 function Get-ForegroundProcessName {
     $h = [VKInput]::GetForegroundWindow()
     $procId = [uint32]0
@@ -143,11 +158,11 @@ $prefix = ([string]$cfg.prefix).Trim().ToLower()
 
 $byPhrase = @{}
 foreach ($c in $cfg.commands) {
-    $chord = ConvertTo-Chord $c.key
+    $chords = ConvertTo-Chords $c.key
     foreach ($p in $c.phrases) {
         $phrase = $p.Trim().ToLower()
         if ($byPhrase.ContainsKey($phrase)) { throw "Duplicate phrase: '$phrase'" }
-        $byPhrase[$phrase] = @{ label = $c.label; key = $c.key; chord = $chord }
+        $byPhrase[$phrase] = @{ label = $c.label; key = $c.key; chords = $chords }
     }
 }
 $pause = @($cfg.pausePhrases | ForEach-Object { $_.Trim().ToLower() })
@@ -304,7 +319,7 @@ try {
         }
 
         $lastFired[$text] = $now
-        Send-Chord $cmd.chord
+        Send-Chords $cmd.chords
         Invoke-Beep 'success'
         Write-Log ("{0,-16} -> {1,-10} ({2})" -f $cmd.label, $cmd.key, $conf) 'White'
     }

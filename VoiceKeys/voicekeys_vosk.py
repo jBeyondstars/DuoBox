@@ -2,11 +2,11 @@
 VoiceKeys (Vosk engine): offline voice commands for DuoBox.
 
 Listens to the microphone with a Vosk model restricted to the phrases of
-commands.json, and presses ONE key per recognized phrase in the foreground
-window.
+commands.json, and presses the phrase's key in the foreground window.
 
 Compliance rules, hard-coded on purpose:
-  - 1 phrase = 1 key (+ modifiers), never a sequence or a loop;
+  - 1 phrase = 1 key (+ modifiers), or a short fixed list written in
+    commands.json ("SHIFT-T, T"), sent once; never a loop or a repeat;
   - the key only goes to the active window of THIS PC (SendInput),
     never to a background window or another machine;
   - by default nothing is sent unless WoW is the foreground window.
@@ -108,6 +108,14 @@ def parse_chord(key):
     return mods, key_to_vk(parts[-1])
 
 
+def parse_keys(key):
+    """'SHIFT-T, T' -> [([0x10], 0x54), ([], 0x54)]: chords pressed one after the other."""
+    parts = [k.strip() for k in key.split(",")]
+    if not all(parts):
+        raise ValueError(f"Empty key in '{key}'")
+    return [parse_chord(k) for k in parts]
+
+
 def send_chord(chord):
     mods, vk = chord
     for m in mods:
@@ -117,6 +125,13 @@ def send_chord(chord):
     send_key(vk, True)
     for m in reversed(mods):
         send_key(m, True)
+
+
+def send_keys(chords):
+    for i, chord in enumerate(chords):
+        if i:
+            time.sleep(0.05)  # lets WoW handle the previous key (e.g. the new target) first
+        send_chord(chord)
 
 
 def foreground_process_name():
@@ -171,12 +186,12 @@ def load_config(path):
         cfg = json.load(f)
     by_phrase = {}
     for c in cfg["commands"]:
-        chord = parse_chord(c["key"])
+        chords = parse_keys(c["key"])
         for p in c["phrases"]:
             phrase = " ".join(p.lower().split())
             if phrase in by_phrase:
                 raise ValueError(f"Duplicate phrase: '{phrase}'")
-            by_phrase[phrase] = {"label": c["label"], "key": c["key"], "chord": chord}
+            by_phrase[phrase] = {"label": c["label"], "key": c["key"], "chords": chords}
     pause = [" ".join(p.lower().split()) for p in cfg.get("pausePhrases", [])]
     resume = [" ".join(p.lower().split()) for p in cfg.get("resumePhrases", [])]
     prefix = " ".join(cfg.get("prefix", "").lower().split())
@@ -437,7 +452,7 @@ def main():
 
             last_fired[text] = now
             cmd = by_phrase[text]
-            send_chord(cmd["chord"])
+            send_keys(cmd["chords"])
             beep(cfg, "success")
             log(f"{cmd['label']:<16} -> {cmd['key']:<10} (conf {conf:.2f}, {voiced:.1f} s)", "white")
 

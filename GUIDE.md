@@ -434,7 +434,8 @@ Folder `DuoBox\VoiceKeys`. Run it **only on the priest's PC / client**. Two engi
 `Setup-VoiceKeys.bat` creates a Python virtual environment in `VoiceKeys\.venv`, installs `vosk` and `sounddevice`
 and downloads the English model `vosk-model-small-en-us-0.15` (~40 MB) into `VoiceKeys\model`.
 
-- 1 phrase = 1 key, sent only when WoW is the foreground window on that PC. No sequences, no loops.
+- 1 phrase = 1 key, sent only when WoW is the foreground window on that PC. No loops. One exception you configure
+  yourself: a `key` written as a list (`"SHIFT-T, T"`) presses those keys once, in that order (used by "charge").
 - **Microphone**: `audioDevice` in `commands.json` selects it by name (e.g. `"G435"`), by index, or `null` for the
   Windows default. List devices with `Start-VoiceKeys-Vosk.bat --devices`. Check it: the Windows default is often a webcam.
 - Keys F1 to F12 (this WoW client does not recognize F13-F24). Reserve them for the priest.
@@ -482,7 +483,8 @@ and say "dot".
 | Phrase | Key | Warrior button | Same key on the priest |
 |---|---|---|---|
 | shout / battle shout | F2 | Battle Shout | Fortitude |
-| charge | F12 | Charge (Battle Stance first if needed) | Wand |
+| charge spell | F12 | Charge (Battle Stance first if needed) | Wand |
+| charge | Shift+T then T | Same as the foot pedal: the action bar button on Shift+T (partner's target), then Interact With Target (walks to it with Click-to-Move) | Shift+T, T as bound there |
 | heroic / heroic strike | F11 | Heroic Strike | Smite |
 | rend | Shift+F6 | Rend | Shadow Word: Pain |
 | melee | Shift+F12 | Melee (walks to the target with Click-to-Move) | (unused) |
