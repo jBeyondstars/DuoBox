@@ -1166,8 +1166,8 @@ local function MacroList()
 			-- Same as the Arcane button: Serpent Sting on a new target, then Arcane Shot x3
 			{ "D-Arcane",  ("#showtooltip\n/assist %s\n%s/petattack\n/castsequence [harm,nodead] reset=target/combat Serpent Sting, Arcane Shot, Arcane Shot, Arcane Shot"):format(A, STOP_FOLLOW) },
 			{ "D-Concussive", ("#showtooltip Concussive Shot\n/assist %s\n%s/petattack\n/cast [harm,nodead] Concussive Shot"):format(A, STOP_FOLLOW) },
-			{ "D-Raptor",  ("#showtooltip Raptor Strike\n/assist %s\n/petattack\n/startattack\n/cast [harm,nodead] Raptor Strike"):format(A) },
-			{ "D-Melee",   ("#showtooltip Attack\n/assist %s\n/petattack\n/startattack"):format(A) },
+			{ "D-Raptor",  ("#showtooltip Raptor Strike\n/assist %s\n/petattack\n/startattack [harm,nodead]\n/cast [harm,nodead] Raptor Strike"):format(A) },
+			{ "D-Melee",   ("#showtooltip Attack\n/assist %s\n/petattack\n/startattack [harm,nodead]"):format(A) },
 		}
 		if DB.partner then
 			table.insert(list, { "D-Invite", ("/invite %s"):format(DB.partner) })
@@ -1177,8 +1177,10 @@ local function MacroList()
 		-- Keep your own live enemy target, otherwise take the partner's (works leading or following).
 		-- Melee attacks stop following: the follow would drag the warrior away from its target.
 		local ASSIST = ("/assist [noharm][dead] %s\n"):format(A)
+		-- /startattack only on a live enemy: on WoW Forever, with no live target (corpse to loot), the
+		-- auto-target CVars (TargetAutoEnemy...) make a bare /startattack pick the nearest enemy.
 		local function melee(spell, cast)
-			return ("#showtooltip %s\n%s%s/startattack\n/cast %s"):format(spell, ASSIST, STOP_FOLLOW, cast or ("[harm,nodead] " .. spell))
+			return ("#showtooltip %s\n%s%s/startattack [harm,nodead]\n/cast %s"):format(spell, ASSIST, STOP_FOLLOW, cast or ("[harm,nodead] " .. spell))
 		end
 		local list = {
 			{ "D-Follow",  ("/follow %s"):format(T) },
@@ -1191,7 +1193,7 @@ local function MacroList()
 			-- No /interact in combat: it can go to the mob already in front of you instead of the new target.
 			-- Heroic Strike on the next press, once, only after a Charge that succeeded: /castsequence
 			-- advances on a successful cast only (Charge rage arrives on impact, too late for the same press).
-			{ "D-ChargeP", ("#showtooltip Charge\n/assist %s\n/startattack\n/cast [nostance:1,nocombat,harm,nodead] Battle Stance\n/castsequence [stance:1,harm,nodead] reset=combat Charge, Heroic Strike\n/stopmacro [combat]\n/interact"):format(A) },
+			{ "D-ChargeP", ("#showtooltip Charge\n/assist %s\n/startattack [harm,nodead]\n/cast [nostance:1,nocombat,harm,nodead] Battle Stance\n/castsequence [stance:1,harm,nodead] reset=combat Charge, Heroic Strike\n/stopmacro [combat]\n/interact"):format(A) },
 			-- /interact walks to the target with Click-to-Move (like D-Talk); nothing without an enemy target
 			{ "D-Melee",   ("#showtooltip Attack\n%s/stopmacro [noharm][dead]\n%s/startattack\n/interact"):format(ASSIST, STOP_FOLLOW) },
 			{ "D-Strike",  melee("Heroic Strike") },
@@ -1635,9 +1637,9 @@ local function BuildHunterButtons()
 		.. "\nMorsure de serpent sur une nouvelle cible, puis Tir des arcanes (Morsure relancee apres 3 Tirs)"
 	local slow = AssistButton("Concussive", HUNTER_SPELL.ConcussiveShot, { stopFollow = true, pre = PET })
 	slow.hint = "Prend la cible du partenaire, arrete le follow, familier a l'attaque, Trait de choc (ralentit)"
-	AssistButton("Raptor", HUNTER_SPELL.RaptorStrike, { pre = PET .. "/startattack\n" })
+	AssistButton("Raptor", HUNTER_SPELL.RaptorStrike, { pre = PET .. "/startattack [harm,nodead]\n" })
 	-- "!Attack" so an attack already running is not toggled off
-	local melee = AssistButton("Melee", HUNTER_SPELL.Attack, { pre = PET .. "/startattack\n", repeating = true })
+	local melee = AssistButton("Melee", HUNTER_SPELL.Attack, { pre = PET .. "/startattack [harm,nodead]\n", repeating = true })
 	melee.hint = "Prend la cible du partenaire, familier a l'attaque, attaque au corps a corps"
 	WaitButton()
 end
@@ -1654,7 +1656,7 @@ local function BuildWarriorButtons()
 	local function attack(key, spellID, opts)
 		opts = opts or {}
 		opts.keepTarget, opts.stopFollow = true, true
-		opts.pre = opts.pre or "/startattack\n"
+		opts.pre = opts.pre or "/startattack [harm,nodead]\n" -- no live enemy: no auto-target (see melee())
 		local b = AssistButton(key, spellID, opts)
 		b.hint = TARGET_HINT .. "\nArrete le follow (il t'eloignerait de la cible), attaque auto"
 		return b
