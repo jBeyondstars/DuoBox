@@ -66,6 +66,9 @@ public static class RelayInput {
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+    // 1 ms timer for this process: Start-Sleep 5 then lasts 5 ms instead of ~16 (short clicks)
+    [DllImport("winmm.dll")] public static extern uint timeBeginPeriod(uint ms);
+    [DllImport("winmm.dll")] public static extern uint timeEndPeriod(uint ms);
     [DllImport("kernel32.dll")] static extern IntPtr GetStdHandle(int n);
     [DllImport("kernel32.dll")] static extern bool GetConsoleMode(IntPtr h, out uint mode);
     [DllImport("kernel32.dll")] static extern bool SetConsoleMode(IntPtr h, uint mode);
@@ -279,6 +282,7 @@ function ConvertTo-Trigger($t) {
         name = $name; label = [string]$t.label; keys = [string]$t.keys; chords = (ConvertTo-Chords $t.keys); delayMs = $delay
         combo = ('{0}+{1} click' -f ([string]$t.modifier).ToUpper(), $button.ToLower())
         buttonVk = $MouseButtons[$button]; mods = $mods; state = @{ wasDown = $false; armed = $false }
+        drag = ($button -eq 'LEFT' -or $button -eq 'RIGHT') # the buttons that turn the camera when dragged
     }
 }
 
@@ -335,17 +339,23 @@ function Test-WowForeground {
 
 # --- PC 1: click detection -------------------------------------------------
 
-# One poll of a trigger's mouse button. Returns $true when a real click ends:
-# pressed while $ok (modifier held, relay ON, WoW focused), released within
-# $maxMs, cursor moved at most $maxMove px and not hidden meanwhile (a camera
-# drag hides it; a cursor already hidden at the press is not taken as a drag).
-function Step-Click($s, [bool]$down, [bool]$ok, [int]$x, [int]$y, [bool]$visible, [long]$now, [int]$maxMove, [int]$maxMs) {
+# One poll of a trigger's mouse button. Returns $true when a click is relayed.
+# $ok: pressed with the modifier, relay ON, WoW focused.
+# $drag = $true (left / right buttons, which turn the camera when dragged): only a
+# real click, released within $maxMs, cursor moved at most $maxMove px and not
+# hidden meanwhile (a camera drag hides it; a cursor already hidden at the press
+# is not taken as a drag). $s.reason then says why a press was dropped.
+# $drag = $false (middle, side buttons): relayed as soon as pressed.
+function Step-Click($s, [bool]$down, [bool]$ok, [int]$x, [int]$y, [bool]$visible, [long]$now, [int]$maxMove, [int]$maxMs, [bool]$drag = $true) {
     $fired = $false
     if ($down -and -not $s.wasDown) {
-        $s.armed = $ok; $s.x = $x; $s.y = $y; $s.t = $now; $s.shown = $visible
+        $s.armed = $ok -and $drag; $s.x = $x; $s.y = $y; $s.t = $now; $s.shown = $visible
+        $fired = $ok -and -not $drag
     } elseif ($s.armed) {
-        $moved = [math]::Abs($x - $s.x) -gt $maxMove -or [math]::Abs($y - $s.y) -gt $maxMove
-        if ($moved -or ($s.shown -and -not $visible) -or ($now - $s.t) -gt $maxMs) { $s.armed = $false }
+        $dist = [math]::Max([math]::Abs($x - $s.x), [math]::Abs($y - $s.y))
+        if ($dist -gt $maxMove) { $s.armed = $false; $s.reason = "mouse moved $dist px (max ${maxMove}: a drag turns the camera)" }
+        elseif ($s.shown -and -not $visible) { $s.armed = $false; $s.reason = 'cursor hidden (camera turn)' }
+        elseif (($now - $s.t) -gt $maxMs) { $s.armed = $false; $s.reason = "held over $maxMs ms" }
         elseif (-not $down) { $fired = $true }
     }
     if (-not $down) { $s.armed = $false }
@@ -422,7 +432,9 @@ function Start-Sender {
     Write-Log ("DuoRelay PC 1 -> {0}:{1}. Relay {2} - {3} toggles it. Ctrl+C to quit." -f $address, $cfg.port,
         $(if ($st.enabled) { 'ON' } else { 'OFF' }), $toggleName) 'Green'
     foreach ($t in $Triggers.Values) { Write-Log ("  {0} -> PC 2 presses {1} ({2})" -f $t.combo, $t.keys, $t.label) 'Cyan' }
+    Write-Log 'A press with these modifiers that is not relayed (relay ON) is listed with the reason.' 'DarkGray'
 
+    [void][RelayInput]::timeBeginPeriod(1)
     try {
         while ($true) {
             if ($overlay) { [Windows.Forms.Application]::DoEvents() }
@@ -443,8 +455,17 @@ function Start-Sender {
             foreach ($t in $Triggers.Values) {
                 $down = [RelayInput]::IsDown($t.buttonVk)
                 $ok = $false
-                if ($down -and -not $t.state.wasDown -and $st.enabled) { $ok = (Test-Modifiers $t.mods) -and (Test-WowForeground) }
-                if (Step-Click $t.state $down $ok $cx $cy $visible $now ([int]$cfg.maxClickMovePx) ([int]$cfg.maxClickMs)) {
+                # A press with the trigger's modifiers while the relay is ON: say why it is not relayed
+                if ($down -and -not $t.state.wasDown -and $st.enabled -and (Test-Modifiers $t.mods)) {
+                    $ok = Test-WowForeground
+                    if (-not $ok) { Write-Log ("{0} not relayed: WoW is not the foreground window" -f $t.combo) 'DarkYellow' }
+                }
+                $fired = Step-Click $t.state $down $ok $cx $cy $visible $now ([int]$cfg.maxClickMovePx) ([int]$cfg.maxClickMs) $t.drag
+                if ($t.state.reason) {
+                    Write-Log ("{0} not relayed: {1}" -f $t.combo, $t.state.reason) 'DarkYellow'
+                    $t.state.reason = $null
+                }
+                if ($fired) {
                     $st.seq++
                     if (Send-Relay $udp $to (New-RelayMessage $st.seq 'CLICK' $t.name)) {
                         $st.pending["$($st.seq)"] = $now
@@ -506,6 +527,7 @@ function Start-Sender {
     }
     finally {
         $udp.Close()
+        [void][RelayInput]::timeEndPeriod(1)
         if ($overlay) { $overlay.Close() }
         Write-Log 'DuoRelay stopped.'
     }
@@ -622,6 +644,18 @@ function Invoke-SelfTest {
     Check (-not (& $run @(@($true, $true, 100, 100, $true, 0), @($true, $true, 100, 100, $false, 40), @($false, $false, 100, 100, $true, 80)))) 'camera turn (cursor hidden): nothing'
     Check (-not (& $run @(@($true, $true, 100, 100, $true, 0), @($false, $false, 100, 100, $true, 900)))) 'long press: nothing'
     Check (& $run @(@($true, $true, 100, 100, $false, 0), @($false, $false, 100, 100, $false, 80))) 'cursor always hidden: click still fires'
+    $s = @{ wasDown = $false; armed = $false }
+    [void](Step-Click $s $true $true 100 100 $true 0 6 500); [void](Step-Click $s $true $true 109 100 $true 20 6 500)
+    Check ($s.reason -eq 'mouse moved 9 px (max 6: a drag turns the camera)') "dropped press says why: '$($s.reason)'"
+
+    # Side / middle buttons: relayed at the press, whatever the mouse does next
+    $s = @{ wasDown = $false; armed = $false }
+    $first = Step-Click $s $true $true 100 100 $true 0 6 500 $false
+    $later = @((Step-Click $s $true $true 140 100 $false 900 6 500 $false), (Step-Click $s $false $false 140 100 $true 950 6 500 $false))
+    Check ($first -and -not ($later -contains $true) -and -not $s.reason) 'side button: relayed once, at the press'
+    Check (-not (Step-Click @{ wasDown = $false; armed = $false } $true $false 100 100 $true 0 6 500 $false)) 'side button without modifier: nothing'
+    $drags = @($Triggers.Values | Where-Object { $_.drag } | ForEach-Object { $_.name }) -join ','
+    Check ($drags -eq 'interact,pickup' -and -not $Triggers['follow'].drag) "drag filter only on left / right buttons ($drags)"
 
     # Messages
     $m = ConvertFrom-RelayMessage (New-RelayMessage 42 'CLICK' 'interact')
