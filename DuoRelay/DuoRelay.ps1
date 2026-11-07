@@ -11,6 +11,11 @@
     the warrior's client through the game server first), then presses the
     trigger's keys in WoW ("SHIFT-T, T" = take the partner's target, then the
     interact key), only if WoW is the foreground window.
+    Panel icons (DuoBox RelayPanel.lua): while the mouse is over icon N of the
+    DuoBox spell panel, the addon draws a small colour code in the top-left
+    corner of the WoW window. A left press in WoW (any modifier) reads those
+    pixels; when they say N, the trigger with "pixel": N is relayed (its keys:
+    the spell's action-bar key on PC 2) and no other trigger fires for that press.
 
     WARNING: one click acting in two game clients is input broadcasting, which
     Blizzard's multiboxing policy forbids whatever the transport (cable, LAN,
@@ -22,6 +27,7 @@
       DuoRelay.ps1 -Role Receiver
       DuoRelay.ps1 -SetupFirewall      (PC 2, once: lets PC 1's messages in)
       DuoRelay.ps1 -SelfTest           (no network beyond 127.0.0.1, no key press)
+      DuoRelay.ps1 -PixelProbe         (PC 1: shows the panel code read in WoW, sends nothing)
     Ctrl+C to quit.
 #>
 param(
@@ -30,7 +36,8 @@ param(
     [string]$Pc2,
     [switch]$SetupFirewall,
     [switch]$Elevated,
-    [switch]$SelfTest
+    [switch]$SelfTest,
+    [switch]$PixelProbe
 )
 
 $ErrorActionPreference = 'Stop'
@@ -66,6 +73,8 @@ public static class RelayInput {
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] static extern bool SetProcessDpiAwarenessContext(IntPtr ctx);
+    [DllImport("user32.dll")] static extern bool ClientToScreen(IntPtr hWnd, ref POINT p);
     // 1 ms timer for this process: Start-Sleep 5 then lasts 5 ms instead of ~16 (short clicks)
     [DllImport("winmm.dll")] public static extern uint timeBeginPeriod(uint ms);
     [DllImport("winmm.dll")] public static extern uint timeEndPeriod(uint ms);
@@ -92,6 +101,26 @@ public static class RelayInput {
     }
 
     public static bool IsDown(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
+
+    // Physical pixels on every screen (per-monitor aware), else on the main one
+    public static void DpiAware() {
+        try { if (SetProcessDpiAwarenessContext(new IntPtr(-4))) return; } catch (EntryPointNotFoundException) { }
+        SetProcessDPIAware();
+    }
+
+    // Colours (0xRRGGBB) at the centres of 'count' squares of 'cell' pixels in a row,
+    // from the top-left corner of the window's client area (DuoBox panel code), null if unreadable
+    public static int[] ReadCells(IntPtr hwnd, int cell, int count) {
+        POINT p = new POINT();
+        if (!ClientToScreen(hwnd, ref p)) return null;
+        using (Bitmap bmp = new Bitmap(cell * count, cell))
+        using (Graphics g = Graphics.FromImage(bmp)) {
+            g.CopyFromScreen(p.X, p.Y, 0, 0, bmp.Size);
+            int[] rgb = new int[count];
+            for (int i = 0; i < count; i++) rgb[i] = bmp.GetPixel(i * cell + cell / 2, cell / 2).ToArgb() & 0xFFFFFF;
+            return rgb;
+        }
+    }
 
     // Cursor position; returns false while the cursor is hidden (not used for clicks:
     // WoW hides it whenever a button is held over the 3D world)
@@ -240,6 +269,7 @@ $Defaults = [ordered]@{
     processNames = @('Wow', 'WowB', 'WowClassic', 'WowClassicB'); triggers = @()
     maxClickMovePx = 6; maxClickMs = 500; delayMs = 300; minIntervalMs = 500
     overlay = $true; overlayX = -1; overlayY = 2; sounds = $false
+    pixelCell = 8   # physical pixels per square of the panel code (CELL in RelayPanel.lua)
 }
 # Per-PC settings (IP addresses), written by the script, not in git
 $LocalConfig = [IO.Path]::ChangeExtension($Config, '.local.json')
@@ -269,6 +299,20 @@ function Save-LocalSetting([string]$name, $value) {
 function ConvertTo-Trigger($t) {
     $name = ([string]$t.name).Trim()
     if ($name -notmatch '^[A-Za-z0-9_-]+$') { throw "Trigger name '$name': letters, digits, - and _ only" }
+    # Optional per-trigger wait on PC 2 (pickup: the addon's message has to arrive first)
+    $delay = if ($null -ne $t.delayMs) { [int]$t.delayMs } else { [int]$cfg.delayMs }
+    if ($null -ne $t.pixel) {
+        # Icon of the DuoBox panel: a left click on it, recognised by the code drawn in the corner
+        $code = 0
+        if (-not [int]::TryParse([string]$t.pixel, [ref]$code) -or $code -lt 1 -or $code -gt 36) {
+            throw "Trigger '$name': pixel '$($t.pixel)' must be 1 to 36 (icon number in the DuoBox panel)"
+        }
+        if ($t.button -or $t.modifier) { throw "Trigger '$name': a pixel trigger takes no button / modifier (a left click on the icon)" }
+        return [pscustomobject]@{
+            name = $name; label = [string]$t.label; keys = [string]$t.keys; chords = (ConvertTo-Chords $t.keys); delayMs = $delay
+            combo = "click on icon $code"; pixel = $code; buttonVk = 0; mods = @(); state = @{ wasDown = $false; armed = $false }; drag = $false
+        }
+    }
     $button = ([string]$t.button).Trim().ToUpper()
     if (-not $MouseButtons.ContainsKey($button)) { throw "Trigger '$name': unknown button '$($t.button)' (LEFT, RIGHT, MIDDLE, X1, X2)" }
     $mods = @()
@@ -277,14 +321,66 @@ function ConvertTo-Trigger($t) {
         $mods += $Modifiers[$m]
     }
     if ($mods.Count -eq 0) { throw "Trigger '$name': a modifier is required, otherwise every click would be relayed" }
-    # Optional per-trigger wait on PC 2 (pickup: the addon's message has to arrive first)
-    $delay = if ($null -ne $t.delayMs) { [int]$t.delayMs } else { [int]$cfg.delayMs }
     return [pscustomobject]@{
         name = $name; label = [string]$t.label; keys = [string]$t.keys; chords = (ConvertTo-Chords $t.keys); delayMs = $delay
-        combo = ('{0}+{1} click' -f ([string]$t.modifier).ToUpper(), $button.ToLower())
+        combo = ('{0}+{1} click' -f ([string]$t.modifier).ToUpper(), $button.ToLower()); pixel = 0
         buttonVk = $MouseButtons[$button]; mods = $mods; state = @{ wasDown = $false; armed = $false }
         drag = ($button -eq 'LEFT' -or $button -eq 'RIGHT') # the buttons that turn the camera when dragged
     }
+}
+
+# Config list -> @{ all = name -> trigger (ordered); pixel = icon number -> trigger }
+function Import-Triggers($list) {
+    $all = [ordered]@{}; $pixel = @{}
+    foreach ($t in @($list)) {
+        $trigger = ConvertTo-Trigger $t
+        if ($all.Contains($trigger.name)) { throw "Duplicate trigger name '$($trigger.name)'" }
+        if ($trigger.pixel) {
+            if ($pixel.ContainsKey($trigger.pixel)) { throw "Triggers '$($pixel[$trigger.pixel].name)' and '$($trigger.name)' have the same pixel $($trigger.pixel)" }
+            $pixel[$trigger.pixel] = $trigger
+        }
+        $all[$trigger.name] = $trigger
+    }
+    return @{ all = $all; pixel = $pixel }
+}
+
+# --- Panel code (RelayPanel.lua) -------------------------------------------
+# 4 squares A, 7-A, B, 7-B; each channel full (>= 170) or off (<= 85), 4 = red,
+# 2 = green, 1 = blue; A and B 1 to 6; icon = (A - 1) * 6 + B. 0 = no code.
+
+function ConvertFrom-PixelCells($rgb) {
+    if ($null -eq $rgb -or @($rgb).Count -ne 4) { return 0 }
+    $v = @()
+    foreach ($c in @($rgb)) {
+        $bits = 0
+        foreach ($shift in 16, 8, 0) {
+            $ch = ([int]$c -shr $shift) -band 0xFF
+            if ($ch -ge 170) { $bits = $bits * 2 + 1 } elseif ($ch -le 85) { $bits = $bits * 2 } else { return 0 }
+        }
+        $v += $bits
+    }
+    if ($v[0] -lt 1 -or $v[0] -gt 6 -or $v[2] -lt 1 -or $v[2] -gt 6) { return 0 }
+    if ($v[1] -ne 7 - $v[0] -or $v[3] -ne 7 - $v[2]) { return 0 }
+    return ($v[0] - 1) * 6 + $v[2]
+}
+
+# Icon number -> the 4 colours RelayPanel.lua draws (self-test)
+function ConvertTo-PixelCells([int]$n) {
+    $a = [int][math]::Floor(($n - 1) / 6) + 1; $b = ($n - 1) % 6 + 1
+    return ,@(foreach ($v in $a, (7 - $a), $b, (7 - $b)) {
+        $(if ($v -band 4) { 0xFF0000 } else { 0 }) -bor $(if ($v -band 2) { 0xFF00 } else { 0 }) -bor $(if ($v -band 1) { 0xFF } else { 0 })
+    })
+}
+
+# Colours of the code squares in the foreground window (WoW), $null if unreadable
+function Read-PanelCells {
+    try { return [RelayInput]::ReadCells([RelayInput]::GetForegroundWindow(), [int]$cfg.pixelCell, 4) }
+    catch { Write-Log ("Screen read failed: {0}" -f $_.Exception.Message) 'DarkYellow'; return $null }
+}
+
+function Format-Cells($rgb) {
+    if ($null -eq $rgb) { return 'unreadable' }
+    return (@($rgb) | ForEach-Object { '#{0:X6}' -f $_ }) -join ' '
 }
 
 # --- Protocol ----------------------------------------------------------------
@@ -417,10 +513,11 @@ function Start-Sender {
     $lastPing = [long]-100000
     $maxDelay = ($Triggers.Values | ForEach-Object { $_.delayMs } | Measure-Object -Maximum).Maximum
     $cx = 0; $cy = 0
+    $leftWasDown = $false
 
+    [RelayInput]::DpiAware() # physical pixels: overlay position, panel code
     $overlay = $null
     if ($cfg.overlay) {
-        [void][RelayInput]::SetProcessDPIAware()
         $overlay = [RelayOverlay]::new([int]$cfg.overlayX, [int]$cfg.overlayY, ([int]$cfg.overlayX -lt 0))
         $overlay.Show()
     }
@@ -428,12 +525,24 @@ function Start-Sender {
         param([string]$text, [Drawing.Color]$color, [int]$ms)
         $st.flashText = $text; $st.flashColor = $color; $st.flashUntil = $clock.ElapsedMilliseconds + $ms
     }
+    $relay = {
+        param($t)
+        $st.seq++
+        if (Send-Relay $udp $to (New-RelayMessage $st.seq 'CLICK' $t.name)) {
+            $st.pending["$($st.seq)"] = $now
+            Write-Log ("{0} -> PC 2 ({1})" -f $t.combo, $t.name) 'White'
+            & $flash 'Relais -> PC 2...' ([Drawing.Color]::Gold) 3000
+        }
+    }
 
     Disable-QuickEdit
     Write-Log ("DuoRelay PC 1 -> {0}:{1}. Relay {2} - {3} toggles it. Ctrl+C to quit." -f $address, $cfg.port,
         $(if ($st.enabled) { 'ON' } else { 'OFF' }), $toggleName) 'Green'
     foreach ($t in $Triggers.Values) { Write-Log ("  {0} -> PC 2 presses {1} ({2})" -f $t.combo, $t.keys, $t.label) 'Cyan' }
     Write-Log 'A press with these modifiers that is not relayed (relay ON) is listed with the reason.' 'DarkGray'
+    if ($PixelTriggers.Count) {
+        Write-Log 'Icons: DuoBox spell panel (/duo panneau), WoW in windowed or windowed fullscreen mode.' 'DarkGray'
+    }
 
     [void][RelayInput]::timeBeginPeriod(1)
     try {
@@ -451,9 +560,26 @@ function Start-Sender {
             }
             $toggleWasHeld = $held
 
+            # Panel icons: a left press while the DuoBox panel's code is drawn
+            $panelClick = $false
+            $leftDown = [RelayInput]::IsDown(0x01)
+            if ($leftDown -and -not $leftWasDown -and $st.enabled -and $PixelTriggers.Count -and (Test-WowForeground)) {
+                $code = ConvertFrom-PixelCells (Read-PanelCells)
+                if ($code) {
+                    $panelClick = $true
+                    if ($PixelTriggers.ContainsKey($code)) { & $relay $PixelTriggers[$code] }
+                    else {
+                        Write-Log ("Icon {0} of the panel: no trigger with ""pixel"": {0} in DuoRelay.json" -f $code) 'Yellow'
+                        & $flash ("Relais : icone {0} sans touche (DuoRelay.json)" -f $code) ([Drawing.Color]::Orange) 2500
+                    }
+                }
+            }
+            $leftWasDown = $leftDown
+
             # Clicks
             [void][RelayInput]::Cursor([ref]$cx, [ref]$cy)
             foreach ($t in $Triggers.Values) {
+                if ($t.pixel) { continue }
                 $down = [RelayInput]::IsDown($t.buttonVk)
                 $ok = $false
                 # A press with the trigger's modifiers while the relay is ON: say why it is not relayed
@@ -462,18 +588,15 @@ function Start-Sender {
                     if (-not $ok) { Write-Log ("{0} not relayed: WoW is not the foreground window" -f $t.combo) 'DarkYellow' }
                 }
                 $fired = Step-Click $t.state $down $ok $cx $cy $now ([int]$cfg.maxClickMovePx) ([int]$cfg.maxClickMs) $t.drag
+                if ($panelClick -and $t.buttonVk -eq 0x01) {
+                    # This press is a panel icon's (Ctrl+click on an icon: no interact)
+                    $fired = $false; $t.state.armed = $false; $t.state.reason = $null
+                }
                 if ($t.state.reason) {
                     Write-Log ("{0} not relayed: {1}" -f $t.combo, $t.state.reason) 'DarkYellow'
                     $t.state.reason = $null
                 }
-                if ($fired) {
-                    $st.seq++
-                    if (Send-Relay $udp $to (New-RelayMessage $st.seq 'CLICK' $t.name)) {
-                        $st.pending["$($st.seq)"] = $now
-                        Write-Log ("{0} -> PC 2 ({1})" -f $t.combo, $t.name) 'White'
-                        & $flash 'Relais -> PC 2...' ([Drawing.Color]::Gold) 3000
-                    }
-                }
+                if ($fired) { & $relay $t }
             }
 
             # Replies from PC 2
@@ -578,6 +701,27 @@ function Start-Receiver {
     }
 }
 
+# PC 1: what the panel code reads in WoW, to check the screen reading alone (sends nothing)
+function Start-PixelProbe {
+    [RelayInput]::DpiAware()
+    Disable-QuickEdit
+    Write-Log 'Pixel probe: put the mouse over an icon of the DuoBox panel in WoW (windowed or windowed fullscreen). Ctrl+C to quit.' 'Green'
+    $last = $null
+    while ($true) {
+        $line = if (Test-WowForeground) {
+            $rgb = Read-PanelCells
+            $code = ConvertFrom-PixelCells $rgb
+            $what = if ($code) {
+                $t = $PixelTriggers[$code]
+                if ($t) { "icon $code -> trigger $($t.name), PC 2 would press $($t.keys)" } else { "icon $code, no trigger with ""pixel"": $code" }
+            } else { 'no code' }
+            '{0}  ({1})' -f $what, (Format-Cells $rgb)
+        } else { 'WoW is not the foreground window' }
+        if ($line -ne $last) { Write-Log $line $(if ($line -like 'icon*') { 'White' } else { 'DarkGray' }); $last = $line }
+        Start-Sleep -Milliseconds 200
+    }
+}
+
 # PC 2, once: inbound rule for the UDP port, limited to PC 1 (or to the local subnet)
 function Install-FirewallRule {
     $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
@@ -656,6 +800,37 @@ function Invoke-SelfTest {
     $drags = @($Triggers.Values | Where-Object { $_.drag } | ForEach-Object { $_.name }) -join ','
     Check ($drags -eq 'interact,pickup' -and -not $Triggers['follow'].drag) "drag filter only on left / right buttons ($drags)"
 
+    # Panel code: same scheme as RelayPanel.lua (tests/test_relay_panel.py checks icon 10 there too)
+    $roundTrip = @(1..36 | Where-Object { (ConvertFrom-PixelCells (ConvertTo-PixelCells $_)) -ne $_ })
+    Check ($roundTrip.Count -eq 0) "panel code: icons 1-36 read back ($($roundTrip -join ','))"
+    Check ((ConvertFrom-PixelCells @(0x00FF00, 0xFF00FF, 0xFF0000, 0x00FFFF)) -eq 10) 'panel code: green, magenta, red, cyan = icon 10'
+    Check ((ConvertFrom-PixelCells @(0x2828D2, 0xC8D23C, 0x3C3CF0, 0xF0E655)) -eq 1) 'panel code: colours shifted by the screen still read'
+    $bad = [ordered]@{
+        'nothing drawn (game picture)' = @(0x203040, 0x605040, 0x101010, 0x8090A0)
+        'black and white' = @(0x000000, 0xFFFFFF, 0x000000, 0xFFFFFF)
+        'half channel' = @(0x0000FF, 0xFFFF80, 0x0000FF, 0xFFFF00)
+        'wrong complement' = @(0x0000FF, 0xFF00FF, 0x0000FF, 0xFFFF00)
+        'three squares' = @(0x0000FF, 0xFFFF00, 0x0000FF)
+    }
+    foreach ($k in $bad.Keys) { Check ((ConvertFrom-PixelCells $bad[$k]) -eq 0) "panel code refused: $k" }
+    Check ((ConvertFrom-PixelCells $null) -eq 0) 'panel code refused: screen unreadable'
+
+    # Pixel triggers: no modifier, at once, never in the mouse button loop
+    $px = Import-Triggers @(
+        [pscustomobject]@{ name = 'a'; button = 'LEFT'; modifier = 'CTRL'; keys = 'T' },
+        [pscustomobject]@{ name = 'b'; pixel = 2; keys = 'F4'; delayMs = 0 })
+    Check ($px.pixel[2].name -eq 'b' -and $px.pixel[2].delayMs -eq 0 -and -not $px.pixel[2].drag -and $px.all['a'].pixel -eq 0) 'pixel trigger parsed'
+    foreach ($case in @(@{ name = 'c'; pixel = 0; keys = 'T' }, @{ name = 'c'; pixel = 37; keys = 'T' }, @{ name = 'c'; pixel = 'x'; keys = 'T' },
+                        @{ name = 'c'; pixel = 3; keys = 'T'; modifier = 'CTRL' })) {
+        $threw = $false; try { [void](ConvertTo-Trigger ([pscustomobject]$case)) } catch { $threw = $true }
+        Check $threw ("pixel trigger refused: pixel {0}{1}" -f $case.pixel, $(if ($case.modifier) { ' with a modifier' } else { '' }))
+    }
+    $threw = $false
+    try { [void](Import-Triggers @([pscustomobject]@{ name = 'a'; pixel = 1; keys = 'T' }, [pscustomobject]@{ name = 'b'; pixel = 1; keys = 'E' })) } catch { $threw = $true }
+    Check $threw 'two triggers with the same pixel refused'
+    $icons = @($PixelTriggers.Keys | Sort-Object | ForEach-Object { "$_=$($PixelTriggers[$_].keys)" }) -join ' '
+    Write-Log ("  info  panel icons in the config: {0}" -f $(if ($icons) { $icons } else { 'none' }))
+
     # Messages
     $m = ConvertFrom-RelayMessage (New-RelayMessage 42 'CLICK' 'interact')
     Check ($m -and $m.seq -eq 42 -and $m.kind -eq 'CLICK' -and $m.arg -eq 'interact') 'message round trip'
@@ -716,16 +891,14 @@ function Invoke-SelfTest {
 # --- Main --------------------------------------------------------------------
 
 $cfg = Import-RelayConfig
-$Triggers = [ordered]@{}
-foreach ($t in @($cfg.triggers)) {
-    $trigger = ConvertTo-Trigger $t
-    if ($Triggers.Contains($trigger.name)) { throw "Duplicate trigger name '$($trigger.name)'" }
-    $Triggers[$trigger.name] = $trigger
-}
+$imported = Import-Triggers $cfg.triggers
+$Triggers = $imported.all          # name -> trigger
+$PixelTriggers = $imported.pixel   # panel icon number -> trigger
 $RuleName = "DuoRelay (UDP $($cfg.port))"
 
 if ($SelfTest) { Invoke-SelfTest; return }
 if ($SetupFirewall) { Install-FirewallRule; return }
+if ($PixelProbe) { Start-PixelProbe; return }
 if (-not $Triggers.Count) { throw "No trigger in $Config" }
 switch ($Role) {
     'Sender'   { Start-Sender }

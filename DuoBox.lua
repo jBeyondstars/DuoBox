@@ -56,6 +56,8 @@ local defaults = {
 	pickupRelay = false,  -- DuoRelay Ctrl+right click: the partner picks up the same kind of object (PickupRelay.lua)
 	facingCone  = false,  -- yellow cone at the partner's feet, where it faces (FacingCone.lua)
 	coneHeight  = 100,    -- %: how far under the partner's nameplate the cone starts (its feet)
+	relayPanel  = false,  -- DuoRelay: panel of the warrior's spells, a click = the warrior casts it (RelayPanel.lua)
+	relayPanelSpells = "402927,1240193,5308,6343,7384", -- its icons, in DuoRelay.json "pixel" order: Victory Rush, Slam, Execute, Thunder Clap, Overpower
 }
 
 local DB
@@ -2362,6 +2364,7 @@ local function Set(key, value)
 	if (key == "procLight" or key == "procOff") and ns.RefreshProcLight then ns.RefreshProcLight() end
 	if key == "journal" and ns.RefreshJournal then ns.RefreshJournal() end
 	if (key == "facingCone" or key == "coneHeight") and ns.RefreshCone then ns.RefreshCone(key) end
+	if (key == "relayPanel" or key == "relayPanelSpells") and ns.RefreshRelayPanel then ns.RefreshRelayPanel() end
 	if key == "rotation" and ns.RotationChanged then ns.RotationChanged() end -- loaded by a profile
 	if (key == "tracking" or key == "partner") and ns.RefreshTracking then
 		ns.RefreshTracking()
@@ -2479,6 +2482,12 @@ local function Command(input)
 		ns.DungeonCommand(cmd == "tank" and "tank" or "dungeon", cmd == "tank" and arg or arg:lower())
 	elseif cmd == "profile" or cmd == "profil" then
 		ns.ProfileCommand(arg)
+	elseif cmd == "panneau" or cmd == "panel" then
+		if ns.RelayPanelCommand then
+			ns.RelayPanelCommand(arg)
+		else -- RelayPanel.lua added to the .toc while the game was running
+			Print("RelayPanel.lua n'est pas charge : redemarre completement le jeu.")
+		end
 	elseif cmd == "move" then
 		ToggleMoveMode()
 	elseif cmd == "macros" then
@@ -2523,6 +2532,7 @@ local function Command(input)
 		Print("  /duo lightsound [on|off] - son optionnel quand le voyant reste rouge (desactive par defaut)")
 		Print("  /duo proc [on|off|debug|reset] - voyant des evenements : Fulgurance, Execution... du partenaire (sorts : onglet Alertes)")
 		Print("  /duo cone [on|off|debug] - cone jaune aux pieds du partenaire : vers ou il est tourne (hors donjon, desactive par defaut)")
+		Print("  /duo panneau [on|off|sorts <liste>|defaut] - icones des sorts du guerrier, un clic les lui fait lancer (DuoRelay, desactive par defaut)")
 		Print("  /duo profile [save|load|delete <nom>] - profils de reglages, communs aux persos du compte (seul : la liste)")
 		Print("  /duo journal [on|off|clear|cvars] - journal de combat pour tools/analyze_fights.py (mesure, desactive par defaut)")
 		Print("  /duo status")

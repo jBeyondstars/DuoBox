@@ -25,6 +25,41 @@
       "button": "X1",
       "keys": "F1",
       "delayMs": 0
+    },
+    {
+      "name": "victoryrush",
+      "label": "panel icon 1: Victory Rush, action bar key F4 (slot 78, Battle Stance page)",
+      "pixel": 1,
+      "keys": "F4",
+      "delayMs": 0
+    },
+    {
+      "name": "slam",
+      "label": "panel icon 2: Slam, action bar key F (slot 63)",
+      "pixel": 2,
+      "keys": "F",
+      "delayMs": 0
+    },
+    {
+      "name": "execute",
+      "label": "panel icon 3: Execute, action bar key 5 (slot 77, Battle Stance page)",
+      "pixel": 3,
+      "keys": "5",
+      "delayMs": 0
+    },
+    {
+      "name": "thunderclap",
+      "label": "panel icon 4: Thunder Clap, action bar key C (slot 79, Battle Stance page)",
+      "pixel": 4,
+      "keys": "C",
+      "delayMs": 0
+    },
+    {
+      "name": "overpower",
+      "label": "panel icon 5: Overpower, action bar key E (slot 62)",
+      "pixel": 5,
+      "keys": "E",
+      "delayMs": 0
     }
   ],
   "delayMs": 150,

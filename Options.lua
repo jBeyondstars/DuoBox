@@ -400,6 +400,11 @@ Toggle(auto, COL2, -18, "pickupRelay", "Ramassage relaye (Ctrl + clic droit)",
 	.. "Sinon il ne fait rien et ton ecran dit ce qu'il vise. Meme type d'objet, pas forcement le meme exemplaire. "
 	.. "Hors combat seulement. Utilise la touche Ctrl+Maj+F9 chez le partenaire (GUIDE.md, section 7).")
 	:HookScript("OnClick", function() if ns.RefreshPickupRelay then ns.RefreshPickupRelay() end end)
+Toggle(auto, COL2, -42, "relayPanel", "Panneau des sorts du guerrier",
+	"Sur le pretre, desactive par defaut, avec DuoRelay lance sur les deux PC. Un clic sur une icone fait lancer "
+	.. "le sort au guerrier : DuoRelay presse sa touche de barre sur le PC 2 (rien ne se passe dans ce jeu). "
+	.. "Icone N = declencheur \"pixel\": N de DuoRelay.json. Fenetre ou plein ecran fenetre. "
+	.. "/duo panneau sorts <liste> : changer les icones (GUIDE.md, section 7).")
 
 Header(auto, 0, -104, "Quetes")
 Toggle(auto, 0, -122, "autoShare", "Partager automatiquement les quetes acceptees",

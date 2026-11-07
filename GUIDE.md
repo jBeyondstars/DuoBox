@@ -668,3 +668,48 @@ PC 2 only accepts messages from PC 1 (`pc1Address`) or, without it, from a priva
 carry no password: anyone on your local network could make the warrior press the configured keys.
 
 Test without network or key press: `powershell -ExecutionPolicy Bypass -File DuoRelay\DuoRelay.ps1 -SelfTest`.
+
+### Warrior spell panel (click an icon on PC 1)
+A row of the warrior's spell icons on the priest's screen. With the relay ON, a **left click** on an icon makes
+PC 2 press that spell's **action-bar key** in the warrior's WoW: the warrior casts it. It is meant for the spells
+the Rotation key handles badly: one macro run tries only one spell on the global cooldown, and Victory Rush and
+Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
+- Priest only: **Automatisme > DuoRelay > Panneau des sorts du guerrier**, or `/duo panneau` (off by default).
+  The warrior's DuoBox does nothing new: PC 2 presses the warrior's own keys.
+- Drag the dark strip above the icons to move the panel. The icons are plain frames: a click on them does nothing
+  in the priest's game, in or out of combat. The tooltip shows the spell and the icon's number.
+- Default icons: **1** Victory Rush, **2** Slam, **3** Execute, **4** Thunder Clap, **5** Overpower.
+  `/duo panneau sorts Victory Rush, Slam, 5308` replaces them (English names of the usual warrior spells, or spell
+  IDs; 10 at most), `/duo panneau sorts` lists them with their numbers, `/duo panneau defaut` restores them.
+- How DuoRelay knows the icon (a game addon cannot talk to another program): while the mouse is over icon N, DuoBox
+  draws 4 small squares, 8 screen pixels each, in the top-left corner of the WoW window, colours that encode N.
+  On a left press in WoW, DuoRelay reads those pixels and relays the trigger whose `"pixel"` is N. Each colour is
+  followed by its complement, so the game's own picture does not pass for a code. A Ctrl+click on an icon counts as
+  an icon click, not as a Ctrl+click interact.
+- **WoW must run in Windowed or Windowed (Fullscreen) mode**: in exclusive fullscreen other programs cannot read
+  the picture, and the clicks on the icons do nothing.
+- The icon number is the `"pixel"` of a trigger in `DuoRelay.json`, which holds the key PC 2 presses: keep both
+  lists in the same order. Default triggers, read from the warrior's key bindings and combat journal (Execute: told
+  by the user) on 2026-11-07:
+
+| Icon | Spell | Key on PC 2 | Action bar slot |
+|---|---|---|---|
+| 1 | Victory Rush | `F4` | 78 (Battle Stance page of the main bar, button 6) |
+| 2 | Slam | `F` | 63 (bottom left bar, button 3) |
+| 3 | Execute | `5` | 77 (Battle Stance page of the main bar, button 5) |
+| 4 | Thunder Clap | `C` | 79 (Battle Stance page of the main bar, button 7) |
+| 5 | Overpower | `E` | 62 (bottom left bar, button 2) |
+
+- Main bar keys (`F4`, `5`, `C`) press the Battle Stance page: in another stance they press that stance's button.
+  If you move a spell on the warrior's bars, change its `keys`.
+- A panel trigger: `{ "name": "slam", "label": "...", "pixel": 2, "keys": "F", "delayMs": 0 }`. No `button`
+  and no `modifier`; `pixel` from 1 to 36; `delayMs` 0 = pressed at once. `pixelCell` (8, optional) is the
+  square size in pixels and must match `CELL` in `RelayPanel.lua`.
+- Same `DuoRelay.json` on both PCs (PC 1 reads the icon numbers, PC 2 the keys): after a change, copy it to the
+  other PC and restart both scripts.
+- `minIntervalMs` (0.5 s) still applies: an icon clicked less than 0.5 s after the previous relayed click is ignored.
+- Label on PC 1: `Relais -> PC 2 : OK` as for the other clicks; `Relais : icone N sans touche (DuoRelay.json)`
+  when no trigger has that number.
+- To check the screen reading alone, without PC 2 and without pressing anything: on PC 1 run
+  `powershell -ExecutionPolicy Bypass -File DuoRelay\DuoRelay.ps1 -PixelProbe`, click the WoW window and hover the
+  icons. The window shows `icon 2 -> trigger slam, PC 2 would press F` and the colours read, or `no code`.

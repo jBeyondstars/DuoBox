@@ -25,6 +25,7 @@ The diagram shows a few examples; see the [VoiceKeys setup and full command list
 - Optional hunter combat-exit notifications (feature flag disabled by default)
 - Optional combat journal (`/duo journal on`, off by default) and `tools/analyze_fights.py`: measures the warrior's dead time in hard fights from the journal and the game's combat log
 - Optional external **DuoRelay** (two PCs on one local network, off until switched on): a Ctrl+click on PC 1 presses the warrior's keys on PC 2. This is input broadcasting, which Blizzard forbids: use at your own risk ([GUIDE section 7](GUIDE.md#7-duorelay-ctrlclick-relayed-to-pc-2-optional-not-allowed-by-blizzard))
+- With DuoRelay, an optional **warrior spell panel** on the priest's screen (`/duo panneau`, off by default): a click on a spell icon makes PC 2 press that spell's action-bar key, so the warrior casts it ([GUIDE section 7](GUIDE.md#warrior-spell-panel-click-an-icon-on-pc-1))
 
 ## Install
 Copy the `DuoBox` folder into `World of Warcraft\_forever_\Interface\AddOns\` (or `_classic_era_\Interface\AddOns\`) on both clients, then in game:

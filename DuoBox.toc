@@ -17,6 +17,7 @@ MeleeLight.lua
 ProcLight.lua
 FacingCone.lua
 PickupRelay.lua
+RelayPanel.lua
 Journal.lua
 Rotation.lua
 Profiles.lua
