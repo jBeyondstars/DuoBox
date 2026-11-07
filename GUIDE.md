@@ -713,3 +713,6 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
 - To check the screen reading alone, without PC 2 and without pressing anything: on PC 1 run
   `powershell -ExecutionPolicy Bypass -File DuoRelay\DuoRelay.ps1 -PixelProbe`, click the WoW window and hover the
   icons. The window shows `icon 2 -> trigger slam, PC 2 would press F` and the colours read, or `no code`.
+  `/duo panneau test [N]` draws icon N's code (2 by default) for 15 s without the mouse and says in the chat where
+  it is (`coin a x=0 y=0 px, carres de 8 px`); keep the relay OFF meanwhile, a left click would relay it.
+  `no code` with the game's colours during the test: the code is not where DuoRelay reads; send the chat line.

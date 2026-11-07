@@ -14,6 +14,15 @@ db = {relayPanel = true, relayPanelSpells = "402927,1240193,5308,6343,7384"}
 printed, frames, textures, templates = {}, {}, {}, {}
 physical = {1920, 1080}
 mouseOver = nil
+uiScale = 1           -- effective scale of UIParent's children
+clock, timers = 100, {}
+function GetTime() return clock end
+C_Timer = {After = function(t, fn) table.insert(timers, {at = clock + t, fn = fn}) end}
+function wait(dt)
+    clock = clock + dt
+    for i = #timers, 1, -1 do if timers[i].at <= clock then table.remove(timers, i).fn() end end
+    if DuoBoxRelaySignal.shown and DuoBoxRelaySignal.scripts.OnUpdate then DuoBoxRelaySignal.scripts.OnUpdate(DuoBoxRelaySignal, dt) end
+end
 SPELLS = {[402927] = {"Victory Rush", 132342}, [1240193] = {"Slam", 132340}, [5308] = {"Execute", 135358},
           [6343] = {"Thunder Clap", 136105}, [7384] = {"Overpower", 132223}, [78] = {"Heroic Strike", 132282},
           [845] = {"Cleave", 132338}, [1715] = {"Hamstring", 132316}, [7386] = {"Sunder Armor", 132363},
@@ -48,7 +57,10 @@ function Region:IsVisible()
     return true
 end
 function Region:IsMouseOver() return mouseOver == self end
-function Region:GetEffectiveScale() return 1 end
+function Region:GetEffectiveScale() return uiScale end
+function Region:GetLeft() return 0 end
+function Region:GetTop() return 768 / uiScale end
+function Region:GetHeight() return self.h end
 function Region:SetColorTexture(r, g, b, a) self.color = {r, g, b, a} end
 function Region:SetTexture(t) self.texture = t end
 function Region:SetText(t) self.text = t end
@@ -163,7 +175,8 @@ class RelayPanelTest(unittest.TestCase):
             local sig = signal()
             assert(not sig.shown)
             enter(3)
-            assert(sig.shown and sig.point[1] == "TOPLEFT" and sig.parent == nil) -- screen corner, own scale
+            assert(sig.shown and sig.parent == UIParent) -- UIParent's top-left corner = the window's
+            assert(sig.point[1] == "TOPLEFT" and sig.point[2] == UIParent and sig.point[3] == "TOPLEFT")
             assert(tip.spell == 5308 and tip.lines[1]:find('"pixel": 3', 1, true), tip.lines[1])
             leave(3)
             assert(not sig.shown and not tip.shown)
@@ -187,6 +200,28 @@ class RelayPanelTest(unittest.TestCase):
         self.assertAlmostEqual(self.code_of(1)[1], 8 * 768 / 1440)
         self.lua.execute("GetPhysicalScreenSize = nil")
         self.assertAlmostEqual(self.code_of(1)[1], 8 * 768 / 1080)
+
+    def test_square_size_follows_the_ui_scale(self):
+        self.load("uiScale = 0.8")
+        self.assertAlmostEqual(self.code_of(1)[1], 8 * 768 / 1080 / 0.8)
+
+    def test_test_command_draws_a_code_without_the_mouse(self):
+        self.load()
+        self.run_lua('''
+            ns.RelayPanelCommand("test")
+            assert(signal().shown)
+            wait(0.5)
+            assert(last():find("test : code de l'icone 2 pendant 15 s, visible, coin a x=0 y=0 px, carres de 8 px", 1, true), last())
+            assert(last():find("ecran de 1080 px", 1, true), last())
+            local bits = {}
+            for _, t in ipairs(squares()) do bits[#bits + 1] = ("%d%d%d"):format(t.color[1], t.color[2], t.color[3]) end
+            assert(table.concat(bits, " ") == "001 110 010 101", table.concat(bits, " ")) -- icon 2
+            wait(10); assert(signal().shown)          -- no mouse needed
+            wait(5); assert(not signal().shown)       -- 15 s
+            ns.RelayPanelCommand("test 7"); wait(0.5); assert(last():find("icone 7", 1, true), last())
+            enter(1); leave(1); assert(not signal().shown) -- the mouse takes over and ends it
+            ns.RelayPanelCommand("test 37"); assert(not signal().shown and last():find("1 a 36", 1, true), last())
+        ''')
 
     def test_code_never_stays_drawn(self):
         self.load()

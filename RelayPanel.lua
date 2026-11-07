@@ -64,48 +64,61 @@ local function Code(n)
 end
 ns.RelayPanelCode = Code
 
--- No parent: its own scale (1), anchored to the screen, shown above everything
-local signal = CreateFrame("Frame", "DuoBoxRelaySignal")
+-- A child of UIParent like every visible frame (with no parent, DuoRelay did
+-- not find the code in the corner, 2026-11-07; cause not proven), at its
+-- top-left corner = the window's, above everything; sizes in physical pixels
+-- through its effective scale
+local signal = CreateFrame("Frame", "DuoBoxRelaySignal", UIParent)
 signal:SetFrameStrata("TOOLTIP")
 signal:SetFrameLevel(9000)
-signal:SetPoint("TOPLEFT")
+signal:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, 0)
 signal:Hide()
 local squares = {}
 for i = 1, CELLS do
 	squares[i] = signal:CreateTexture(nil, "OVERLAY")
 end
-local lit -- icon whose code is drawn
+local lit           -- icon whose code is drawn (nil: /duo panneau test)
+local testUntil = 0 -- /duo panneau test: code drawn without the mouse until then
 
--- UI units of CELL physical pixels for the signal frame (768 units = the screen height at scale 1)
-local function CellUnits()
+local function PhysicalHeight()
 	local _, height = 0, 0
 	if GetPhysicalScreenSize then _, height = GetPhysicalScreenSize() end
 	if not height or height <= 0 then height = 1080 end
-	return CELL * 768 / height / signal:GetEffectiveScale()
+	return height
+end
+
+-- Physical pixels per UI unit of the signal frame (768 units = the screen height at scale 1)
+local function PixelsPerUnit()
+	return PhysicalHeight() / 768 * signal:GetEffectiveScale()
 end
 
 local function Off()
-	lit = nil
+	lit, testUntil = nil, 0
 	signal:Hide()
 end
 
-local function Light(icon)
-	local size = CellUnits()
+-- Draws the code of icon n; owner: the icon under the mouse
+local function Light(n, owner)
+	local size = CELL / PixelsPerUnit()
 	signal:SetSize(size * CELLS, size)
-	for i, v in ipairs(Code(icon.index)) do
+	for i, v in ipairs(Code(n)) do
 		local sq = squares[i]
 		sq:ClearAllPoints()
 		sq:SetSize(size, size)
 		sq:SetPoint("TOPLEFT", (i - 1) * size, 0)
 		sq:SetColorTexture(math.floor(v / 4) % 2, math.floor(v / 2) % 2, v % 2, 1)
 	end
-	lit = icon
+	lit, testUntil = owner, 0
 	signal:Show()
 end
 
--- Never left on: the icon hidden, or left without OnLeave
+-- Never left on: the icon hidden, or left without OnLeave; the test ends on time
 signal:SetScript("OnUpdate", function()
-	if not (lit and lit:IsVisible() and lit:IsMouseOver()) then Off() end
+	if testUntil > 0 then
+		if GetTime() >= testUntil then Off() end
+	elseif not (lit and lit:IsVisible() and lit:IsMouseOver()) then
+		Off()
+	end
 end)
 
 --------------------------------------------------------------------------------
@@ -148,7 +161,7 @@ end)
 handle:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
 local function IconEnter(self)
-	Light(self)
+	Light(self.index, self)
 	GameTooltip:SetOwner(self, "ANCHOR_TOP")
 	if self.spell then GameTooltip:SetSpellByID(self.spell) end
 	GameTooltip:AddLine(("Clic : le guerrier lance ce sort (DuoRelay, \"pixel\": %d)"):format(self.index), 0.4, 1, 0.4, true)
@@ -219,6 +232,25 @@ local function List()
 	return #parts > 0 and table.concat(parts, ", ") or "aucun sort"
 end
 
+-- /duo panneau test [n]: icon n's code drawn TEST s without the mouse, and
+-- where it is in screen pixels, to check with DuoRelay.ps1 -PixelProbe
+local TEST = 15
+local function Test(n)
+	Light(n)
+	testUntil = GetTime() + TEST
+	C_Timer.After(0.5, function() -- once drawn
+		if testUntil == 0 then return end
+		local ppu = PixelsPerUnit()
+		local left, top, screenTop = signal:GetLeft(), signal:GetTop(), UIParent:GetTop()
+		local function px(v) return v and ("%.0f"):format(v * ppu) or "?" end
+		Say(("test : code de l'icone %d pendant %d s, %s, coin a x=%s y=%s px, carres de %s px (ecran de %d px, echelle %.2f). "
+			.. "DuoRelay.ps1 -PixelProbe doit afficher \"icon %d\". Relais OFF pendant le test : un clic gauche le relaierait.")
+			:format(n, TEST, signal:IsVisible() and "visible" or "|cffff4040invisible|r", px(left),
+				px(top and screenTop and screenTop - top), px(signal:GetHeight()), PhysicalHeight(),
+				signal:GetEffectiveScale(), n))
+	end)
+end
+
 function ns.RelayPanelCommand(arg)
 	local sub, rest = (arg or ""):match("^%s*(%S*)%s*(.-)%s*$")
 	sub = sub:lower()
@@ -244,8 +276,15 @@ function ns.RelayPanelCommand(arg)
 	elseif sub == "defaut" or sub == "reset" then
 		ns.Set("relayPanelSpells", ns.DEFAULTS.relayPanelSpells)
 		Say("panneau : " .. List())
+	elseif sub == "test" then
+		local n = tonumber(rest) or 2
+		if n < 1 or n > 36 or n % 1 ~= 0 then
+			Say("panneau : /duo panneau test <numero d'icone, 1 a 36>")
+			return
+		end
+		Test(n)
 	else
-		Say("/duo panneau [on|off] | sorts <noms ou ID, separes par des virgules> | defaut")
+		Say("/duo panneau [on|off] | sorts <noms ou ID, separes par des virgules> | defaut | test [numero]")
 	end
 end
 
