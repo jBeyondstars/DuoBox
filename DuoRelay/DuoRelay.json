@@ -27,7 +27,7 @@
       "delayMs": 0
     }
   ],
-  "delayMs": 300,
+  "delayMs": 150,
   "minIntervalMs": 500,
   "maxClickMovePx": 6,
   "maxClickMs": 500,

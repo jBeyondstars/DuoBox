@@ -648,7 +648,7 @@ Folder `DuoBox\DuoRelay` (Windows PowerShell 5.1, nothing to install). Same fold
   at all: the script did not see the button (mouse software turning it into a key, see above).
 - **Any** Ctrl+click in the WoW window counts, even on the interface (Ctrl+click on an item = dressing room)
   or on the ground. In that case the warrior assists the priest's current target. Switch the relay OFF when you don't need it.
-- PC 2 waits `delayMs` (300 ms) before pressing the keys. The priest's new target has to reach the warrior's
+- PC 2 waits `delayMs` (150 ms) before pressing the keys. The priest's new target has to reach the warrior's
   client through the game server first, otherwise `/assist` takes the previous target. If the warrior takes
   the old target, raise it to 400–500.
 - One action per `minIntervalMs` (0.5 s): a double click presses the keys once.
