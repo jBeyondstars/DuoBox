@@ -267,7 +267,7 @@ function Test-Modifiers($mods) {
 $Defaults = [ordered]@{
     port = 47815; pc2Address = ''; pc1Address = ''; startEnabled = $false; toggleKey = 'CTRL-ALT-D'
     processNames = @('Wow', 'WowB', 'WowClassic', 'WowClassicB'); triggers = @()
-    maxClickMovePx = 6; maxClickMs = 500; delayMs = 300; minIntervalMs = 500
+    maxClickMovePx = 30; maxClickMs = 500; delayMs = 300; minIntervalMs = 500
     overlay = $true; overlayX = -1; overlayY = 2; sounds = $false
     pixelCell = 8   # physical pixels per square of the panel code (CELL in RelayPanel.lua)
 }

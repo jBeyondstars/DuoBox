@@ -92,7 +92,7 @@
   ],
   "delayMs": 150,
   "minIntervalMs": 500,
-  "maxClickMovePx": 6,
+  "maxClickMovePx": 30,
   "maxClickMs": 500,
   "processNames": ["Wow", "WowB", "WowClassic", "WowClassicB"],
   "overlay": true,
