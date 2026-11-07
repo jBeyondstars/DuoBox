@@ -15,8 +15,9 @@
 -- DuoRelay.ps1 reads the same scheme (ConvertFrom-PixelCells).
 -- Option DB.relayPanel (off by default); the spells, DB.relayPanelSpells, are
 -- only shown here (icon, tooltip): their order is the "pixel" number of the
--- DuoRelay.json triggers. /duo panneau. Kept out of DuoBox.lua (Lua 5.1's 200
--- locals).
+-- DuoRelay.json triggers. DB.relayPanelHidden: entries of that list whose icon
+-- is hidden (Options > Automatisme), the others keep their number. /duo
+-- panneau. Kept out of DuoBox.lua (Lua 5.1's 200 locals).
 -- Cooldowns on the icons, estimated: this client hides cooldowns from addons
 -- in combat (C_Spell.GetSpellCooldown is SecretWhenCooldownsRestricted, seen in
 -- game 2026-11-07), and the partner's cast events carry a hidden spell ID
@@ -32,7 +33,7 @@
 
 local _, ns = ...
 
-local MAX = 10      -- icons
+local MAX = 12      -- icons (the options page lists them in 2 columns of 6)
 local SIZE = 36     -- icon size (UI units)
 local GAP = 4
 local HANDLE = 12   -- height of the drag strip above the icons
@@ -48,8 +49,17 @@ local NAMES = {
 	retaliation = 20230, ["demoralizing shout"] = 1160, ["shield bash"] = 72, revenge = 6572,
 	["shield block"] = 2565, disarm = 676, intercept = 20252, whirlwind = 1680, pummel = 6552,
 	["berserker rage"] = 18499, ["intimidating shout"] = 5246, ["piercing howl"] = 12323,
-	["mortal strike"] = 12294, bloodthirst = 23881, ["shield slam"] = 23922,
+	["mortal strike"] = 12294, bloodthirst = 23881, ["shield slam"] = 23922, ["challenging shout"] = 1161,
 }
+
+-- Panel entries that are not spells: a key of the warrior's own all the same
+-- (its "pixel" trigger in DuoRelay.json); no cooldown, no blink
+local ACTIONS = {
+	interact = { name = "Interagir", icon = "Interface\\CURSOR\\Interact",
+		tip = "Le guerrier appuie sur sa touche d'interaction (T) : ce qu'elle prend chez lui (PNJ, objet, "
+			.. "ou sa cible ennemie, option Touche d'interaction)." },
+}
+local ACTION_NAMES = { interact = "interact", interagir = "interact", interaction = "interact" }
 
 local function DB() return ns.GetDB() end
 
@@ -61,14 +71,54 @@ local function Val(v)
 	return v
 end
 
--- Spell IDs of the panel, in order ("402927,1240193" in the settings)
+-- Entries of the panel, in order: spell IDs, or ACTIONS keys ("402927,1240193,interact" in the settings)
 local function Spells()
 	local ids = {}
-	for id in tostring(DB() and DB().relayPanelSpells or ""):gmatch("%d+") do
-		if #ids < MAX then ids[#ids + 1] = tonumber(id) end
+	for part in tostring(DB() and DB().relayPanelSpells or ""):gmatch("[^,]+") do
+		part = part:match("^%s*(.-)%s*$")
+		local entry = tonumber(part) or (ACTIONS[part] and part)
+		if entry and #ids < MAX then ids[#ids + 1] = entry end
 	end
 	return ids
 end
+
+-- Entries hidden in the options (DB.relayPanelHidden, "1161,interact"): still in
+-- the list, so every other icon keeps its number, the "pixel" of DuoRelay.json
+local function Hidden()
+	local set = {}
+	for part in tostring(DB() and DB().relayPanelHidden or ""):gmatch("[^,]+") do
+		part = part:match("^%s*(.-)%s*$")
+		set[tonumber(part) or part] = true
+	end
+	return set
+end
+
+-- Name of an entry, for the lists
+local function EntryName(entry)
+	if ACTIONS[entry] then return ACTIONS[entry].name end
+	return ns.SpellNameIcon(entry) or tostring(entry)
+end
+
+-- For Options.lua: { { entry, name, icon, hidden }, ... } in panel order
+function ns.RelayPanelEntries()
+	local list, hidden = {}, Hidden()
+	for _, entry in ipairs(Spells()) do
+		local icon = ACTIONS[entry] and ACTIONS[entry].icon or select(2, ns.SpellNameIcon(entry))
+		list[#list + 1] = { entry = entry, name = EntryName(entry), icon = icon, hidden = hidden[entry] == true }
+	end
+	return list
+end
+
+-- Shows or hides an entry's icon (Options > Automatisme)
+function ns.SetRelayPanelHidden(entry, hide)
+	local set, parts = Hidden(), {}
+	set[entry] = hide and true or nil
+	for _, e in ipairs(Spells()) do -- kept in panel order; entries no longer listed are dropped
+		if set[e] then parts[#parts + 1] = tostring(e) end
+	end
+	ns.Set("relayPanelHidden", table.concat(parts, ","))
+end
+ns.RELAY_PANEL_MAX = MAX
 
 --------------------------------------------------------------------------------
 -- The code in the top-left corner
@@ -150,8 +200,8 @@ panel:SetClampedToScreen(true)
 panel:Hide()
 panel:SetScript("OnHide", Off)
 
--- Drag strip: moves the panel (the icons themselves never move it, a click on
--- them must stay a click)
+-- Drag strip, the partner's rage bar: moves the panel (the icons themselves
+-- never move it, a click on them must stay a click)
 local handle = CreateFrame("Frame", nil, panel)
 handle:SetPoint("TOPLEFT")
 handle:SetPoint("TOPRIGHT")
@@ -166,22 +216,38 @@ end)
 local strip = handle:CreateTexture(nil, "BACKGROUND")
 strip:SetAllPoints()
 strip:SetColorTexture(0, 0, 0, 0.5)
-local title = handle:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-title:SetPoint("LEFT", 2, 0)
-title:SetText("Guerrier")
+-- The partner's power (rage for the warrior): the bar and the text take the
+-- game's values as they are, hidden ones included, never read here
+local power = CreateFrame("StatusBar", nil, handle)
+power:SetAllPoints()
+power:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+power:SetStatusBarColor(1, 0, 0)
+power:SetMinMaxValues(0, 1)
+power:SetValue(0)
+local powerText = power:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+powerText:SetPoint("CENTER", 0, 0)
+powerText:SetText("Guerrier")
 handle:SetScript("OnEnter", function(self)
 	GameTooltip:SetOwner(self, "ANCHOR_TOP")
-	GameTooltip:SetText("Sorts du guerrier (DuoRelay)")
+	GameTooltip:SetText("Rage du guerrier (DuoRelay)")
 	GameTooltip:AddLine("Glisser ici : deplacer le panneau. /duo panneau : options.", 1, 1, 1, true)
 	GameTooltip:Show()
 end)
 handle:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
 local function IconEnter(self)
-	Light(self.index, self)
+	Light(self.index, self) -- always: the click needs the code, with or without the tooltip
+	if DB() and DB().relayPanelTooltip == false then return end -- Options: no spell tooltips
 	GameTooltip:SetOwner(self, "ANCHOR_TOP")
-	if self.spell then GameTooltip:SetSpellByID(self.spell) end
-	GameTooltip:AddLine(("Clic : le guerrier lance ce sort (DuoRelay, \"pixel\": %d)"):format(self.index), 0.4, 1, 0.4, true)
+	local action = self.action and ACTIONS[self.action]
+	if action then
+		GameTooltip:SetText(action.name)
+		GameTooltip:AddLine(action.tip, 1, 1, 1, true)
+		GameTooltip:AddLine(("Clic : DuoRelay le fait faire au guerrier (\"pixel\": %d)"):format(self.index), 0.4, 1, 0.4, true)
+	else
+		if self.spell then GameTooltip:SetSpellByID(self.spell) end
+		GameTooltip:AddLine(("Clic : le guerrier lance ce sort (DuoRelay, \"pixel\": %d)"):format(self.index), 0.4, 1, 0.4, true)
+	end
 	GameTooltip:Show()
 end
 
@@ -209,39 +275,71 @@ for i = 1, MAX do
 	cd:SetAllPoints()
 	if cd.SetHideCountdownNumbers then cd:SetHideCountdownNumbers(false) end
 	b.cd = cd
+	-- Blink of a spell the partner's game lights up (ProcLight.lua), above the swipe
+	local glowFrame = CreateFrame("Frame", nil, b)
+	glowFrame:SetAllPoints()
+	glowFrame:SetFrameLevel((cd:GetFrameLevel() or 1) + 1)
+	local glow = glowFrame:CreateTexture(nil, "OVERLAY")
+	glow:SetPoint("TOPLEFT", -SIZE * 0.25, SIZE * 0.25)
+	glow:SetPoint("BOTTOMRIGHT", SIZE * 0.25, -SIZE * 0.25)
+	glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+	glow:SetBlendMode("ADD")
+	glow:Hide()
+	local blink = glow:CreateAnimationGroup()
+	blink:SetLooping("BOUNCE")
+	local fade = blink:CreateAnimation("Alpha")
+	fade:SetFromAlpha(1)
+	fade:SetToAlpha(0.15)
+	fade:SetDuration(0.35)
+	b.glow, b.blink = glow, blink
 	b:Hide()
 	icons[i] = b
 end
 
 local UpdateCooldowns -- draws the icons' cooldowns (below)
+local UpdatePower     -- the partner's rage bar (below)
+local UpdateGlows     -- the blinks of the lit spells (below)
 
--- Icons in rows of DB.relayPanelPerRow, left to right then top to bottom
+-- The shown icons (b.slot = 1, 2...) in rows of DB.relayPanelPerRow, left to
+-- right then top to bottom; n of them
 local function Layout(n)
 	local perRow = math.floor(tonumber(DB() and DB().relayPanelPerRow) or MAX)
 	perRow = math.max(1, math.min(MAX, perRow))
-	for i, b in ipairs(icons) do
-		local col, row = (i - 1) % perRow, math.floor((i - 1) / perRow)
-		b:ClearAllPoints()
-		b:SetPoint("TOPLEFT", col * (SIZE + GAP), -(HANDLE + 2) - row * (SIZE + GAP))
+	for _, b in ipairs(icons) do
+		if b.slot then
+			local col, row = (b.slot - 1) % perRow, math.floor((b.slot - 1) / perRow)
+			b:ClearAllPoints()
+			b:SetPoint("TOPLEFT", col * (SIZE + GAP), -(HANDLE + 2) - row * (SIZE + GAP))
+		end
 	end
 	local cols, rows = math.min(n, perRow), math.ceil(n / perRow)
 	panel:SetSize(cols * SIZE + (cols - 1) * GAP, HANDLE + 2 + rows * SIZE + (rows - 1) * GAP)
 end
 
 local function Refresh()
-	local ids = Spells()
+	local ids, hidden = Spells(), Hidden()
+	local shown = 0
 	for i, b in ipairs(icons) do
-		b.spell = ids[i]
-		if ids[i] then
-			local _, icon = ns.SpellNameIcon(ids[i])
+		local entry = ids[i]
+		b.spell = type(entry) == "number" and entry or nil   -- cooldown, blink: spells only
+		b.action = type(entry) == "string" and entry or nil
+		if entry then
+			local icon = b.action and ACTIONS[b.action].icon or select(2, ns.SpellNameIcon(entry))
 			b.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
 		end
-		b:SetShown(ids[i] ~= nil)
+		b.slot = nil
+		if entry ~= nil and not hidden[entry] then
+			shown = shown + 1
+			b.slot = shown -- its place; b.index (its code) stays its number in the list
+		end
+		b:SetShown(b.slot ~= nil)
 	end
-	Layout(math.max(#ids, 1))
-	panel:SetShown(DB() ~= nil and DB().relayPanel == true and #ids > 0)
+	Layout(math.max(shown, 1))
+	panel:SetShown(DB() ~= nil and DB().relayPanel == true and shown > 0)
 	if lit and not lit:IsShown() then Off() end
 	UpdateCooldowns()
+	UpdatePower()
+	UpdateGlows()
 end
 ns.RefreshRelayPanel = Refresh
 
@@ -528,6 +626,82 @@ for _, e in ipairs({ "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_SUCCEEDED" }) do
 end
 
 --------------------------------------------------------------------------------
+-- Blinks: the spells the partner's game lights up (Overpower after a dodge,
+-- Execute under 20 %, Victory Rush after a kill), from the event light's
+-- messages (ProcLight.lua, the partner's "Voyant des evenements" option);
+-- yellow when castable, blue when short of rage
+--------------------------------------------------------------------------------
+
+local procLit = {} -- spell name -> true (ready) / false (short of rage)
+
+UpdateGlows = function()
+	for _, b in ipairs(icons) do
+		local name = b.spell and ns.SpellNameIcon(b.spell)
+		local state = name and procLit[name]
+		if state ~= nil and b:IsShown() then
+			if state then b.glow:SetVertexColor(1, 0.9, 0.2) else b.glow:SetVertexColor(0.3, 0.55, 1) end
+			b.glow:Show()
+			if not b.blink:IsPlaying() then b.blink:Play() end
+		else
+			b.blink:Stop()
+			b.glow:Hide()
+		end
+	end
+end
+
+-- list: { { id, ready }, ... }, empty when everything went out (or no news for 3 s)
+ns.OnPartnerProcs = function(list)
+	procLit = {}
+	for _, p in ipairs(list or {}) do
+		local name = ns.SpellNameIcon(p.id)
+		if name then procLit[name] = p.ready and true or false end
+	end
+	UpdateGlows()
+end
+
+--------------------------------------------------------------------------------
+-- The partner's rage bar (its power: mana for a hunter), in place of a title
+--------------------------------------------------------------------------------
+
+local POWER_COLOR = { [0] = { 0, 0.55, 1 }, [1] = { 1, 0, 0 }, [2] = { 1, 0.5, 0.25 }, [3] = { 1, 1, 0 } }
+
+UpdatePower = function()
+	local unit = ns.PartnerUnit()
+	if not panel:IsShown() then return end
+	if not unit or not Val(UnitExists(unit)) then
+		power:SetMinMaxValues(0, 1)
+		power:SetValue(0)
+		powerText:SetText("Guerrier")
+		return
+	end
+	local kind = Num(UnitPowerType(unit)) or 1
+	local c = PowerBarColor and PowerBarColor[kind]
+	if type(c) == "table" and c.r then
+		power:SetStatusBarColor(c.r, c.g, c.b)
+	else
+		c = POWER_COLOR[kind] or POWER_COLOR[1]
+		power:SetStatusBarColor(c[1], c[2], c[3])
+	end
+	-- possibly hidden values: handed to the bar and the text as they are, never compared
+	power:SetMinMaxValues(0, UnitPowerMax(unit, kind))
+	power:SetValue(UnitPower(unit, kind))
+	powerText:SetFormattedText("%d", UnitPower(unit, kind))
+end
+
+local powerEvents = CreateFrame("Frame")
+powerEvents:SetScript("OnEvent", function(_, event, unit)
+	if event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
+		UpdatePower()
+	elseif Val(unit) ~= nil and Val(unit) == ns.PartnerUnit() then -- UNIT_POWER_*, UNIT_MAXPOWER, UNIT_DISPLAYPOWER
+		UpdatePower()
+	end
+end)
+for _, e in ipairs({ "UNIT_POWER_FREQUENT", "UNIT_POWER_UPDATE", "UNIT_MAXPOWER", "UNIT_DISPLAYPOWER",
+	"GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD" }) do
+	pcall(powerEvents.RegisterEvent, powerEvents, e)
+end
+
+--------------------------------------------------------------------------------
 -- /duo panneau
 --------------------------------------------------------------------------------
 
@@ -537,17 +711,24 @@ local function Parse(text)
 	for part in text:gmatch("[^,;]+") do
 		part = part:match("^%s*(.-)%s*$")
 		if part ~= "" then
+			local action = ACTION_NAMES[part:lower()]
 			local id = tonumber(part) or NAMES[part:lower()]
-			if id and ns.SpellNameIcon(id) then ids[#ids + 1] = id else bad[#bad + 1] = part end
+			if action then
+				ids[#ids + 1] = action
+			elseif id and ns.SpellNameIcon(id) then
+				ids[#ids + 1] = id
+			else
+				bad[#bad + 1] = part
+			end
 		end
 	end
 	return ids, bad
 end
 
 local function List()
-	local parts = {}
-	for i, id in ipairs(Spells()) do
-		parts[#parts + 1] = ("%d %s"):format(i, ns.SpellNameIcon(id) or id)
+	local parts, hidden = {}, Hidden()
+	for i, entry in ipairs(Spells()) do
+		parts[#parts + 1] = ("%d %s%s"):format(i, EntryName(entry), hidden[entry] and " (masque)" or "")
 	end
 	return #parts > 0 and table.concat(parts, ", ") or "aucun sort"
 end
@@ -583,7 +764,7 @@ function ns.RelayPanelCommand(arg)
 		if rest ~= "" then
 			local ids, bad = Parse(rest)
 			if #bad > 0 then
-				Say(("panneau : inconnu : %s. Noms anglais (Slam, Thunder Clap...) ou ID du sort ; rien de change.")
+				Say(("panneau : inconnu : %s. Noms anglais (Slam, Thunder Clap...), ID du sort ou interact ; rien de change.")
 					:format(table.concat(bad, ", ")))
 				return
 			elseif #ids > MAX then
@@ -606,7 +787,7 @@ function ns.RelayPanelCommand(arg)
 		end
 		Test(n)
 	else
-		Say("/duo panneau [on|off] | sorts <noms ou ID, separes par des virgules> | defaut | test [numero] | cd")
+		Say("/duo panneau [on|off] | sorts <noms, ID ou interact, separes par des virgules> | defaut | test [numero] | cd")
 	end
 end
 

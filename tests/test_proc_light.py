@@ -225,6 +225,43 @@ class ProcLightTest(unittest.TestCase):
             assert(not ev().events.SPELL_UPDATE_USABLE)
         ''')
 
+    VICTORY = '''
+        NAMES[402927] = "Victory Rush"; learned["Victory Rush"] = 402927
+        auras = {}
+        C_UnitAuras = {GetPlayerAuraBySpellID = function(id) return auras[id] end}
+    '''
+
+    def test_victory_rush_lit_by_its_buff_out_of_combat(self):
+        self.load(self.VICTORY + "combat = false")
+        self.run_lua('''
+            usable.Overpower = true; tick(); assert(#sent == 0, last()) -- out of combat: only Victory Rush
+            auras[402975] = {spellId = 402975}; tick(); assert(last() == "PR:402927u", last())
+            auras[402975] = nil; tick(); assert(last() == "PR:", last()) -- buff over (or spent)
+        ''')
+
+    def test_victory_rush_in_combat_hidden_buff_then_glow(self):
+        self.load(self.VICTORY)
+        self.run_lua('''
+            auras[402975] = SECRET; tick(); assert(#sent == 0, last()) -- hidden in combat, never compared
+            glow[402927] = true; tick(); assert(last() == "PR:402927u", last()) -- the game's glow on it
+            usable.Overpower = true; tick(); assert(last() == "PR:7384u,402927u", last()) -- last in PROCS order
+            event("CHAT_MSG_ADDON", "x", "y", "PARTY", "Partner") -- unrelated message
+            ns.ProcLightCommand("debug")
+            local found
+            for _, p in ipairs(printed) do if p:find("Victory Rush", 1, true) and p:find("buff=SECRET", 1, true) then found = true end end
+            assert(found, table.concat(printed, " | "))
+        ''')
+
+    def test_lit_list_goes_to_the_spell_panel(self):
+        self.load()
+        self.run_lua('''
+            local got
+            ns.OnPartnerProcs = function(list) got = list end
+            msg("7384u,5308p")
+            assert(#got == 2 and got[1].id == 7384 and got[1].ready and got[2].id == 5308 and not got[2].ready)
+            tick(3.5); assert(#got == 0) -- 3 s without news: out
+        ''')
+
 
 if __name__ == "__main__":
     unittest.main()

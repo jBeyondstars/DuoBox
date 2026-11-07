@@ -271,7 +271,12 @@ The icon of a reactive spell of the partner as soon as the game lights it up on 
 the partner's key (pedal) in time; it disappears as soon as the spell goes out again (5 s window over, spell used,
 target dead, end of the fight).
 - Spells: warrior **Overpower** (after a dodge), **Revenge** (after a block, dodge or parry), **Execute** (target under
-  20 % health); rogue Riposte; hunter Counterattack and Mongoose Bite; paladin Hammer of Wrath. Only the learned ones.
+  20 % health), **Victory Rush** (20 s after a kill); rogue Riposte; hunter Counterattack and Mongoose Bite; paladin
+  Hammer of Wrath. Only the learned ones.
+- Victory Rush (WoW Forever): the client always calls it unusable, so it is lit by the game's glow on it or by its
+  "Victorious" buff. The buff is hidden from addons in combat: in a fight only the glow can light it (whether the game
+  glows it is not checked yet: `/duo proc debug` shows `lueur=` and `buff=`). It is the only one also reported out of
+  combat, as its 20 s often start with the fight's last kill.
 - **Gold and pulsing** = ready. **Grey** with "pas assez de rage" = lit but not enough rage (energy, mana) yet. Several
   lit at once: the first one of the list above is shown big, the others are written under the light.
 - Choose the spells in the Alerts tab ("Voyant des evenements du partenaire"): one checkbox per spell of the partner's
@@ -707,15 +712,28 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
 - Priest only: **Automatisme > DuoRelay > Panneau des sorts du guerrier**, or `/duo panneau` (off by default).
   PC 2 presses the warrior's own keys; the warrior's DuoBox only reports its casts for the cooldowns (below),
   nothing to switch on there.
-- Drag the dark strip above the icons to move the panel. The icons are plain frames: a click on them does nothing
-  in the priest's game, in or out of combat. The tooltip shows the spell and the icon's number.
+- Above the icons, the warrior's **rage bar** with its value (mana for a hunter; `Guerrier` when no partner is in
+  the group). Drag it to move the panel. The game may hide the partner's rage from addons in combat: the bar and
+  its number are handed the game's values as they are (the game draws hidden values), so it still shows them.
+  The icons are plain frames: a click on them does nothing in the priest's game, in or out of combat. The tooltip
+  shows the spell and the icon's number; **Automatisme > DuoRelay > Infobulles des sorts** unchecked hides it
+  (the click works the same).
 - Default icons: **1** Victory Rush, **2** Slam, **3** Execute, **4** Thunder Clap, **5** Overpower,
-  **6** Heroic Strike, **7** Cleave, **8** Hamstring, **9** Intimidating Shout. After a DuoBox update that adds
-  icons, `/duo panneau defaut` on the priest takes the new list (the saved list is kept otherwise).
-  `/duo panneau sorts Victory Rush, Slam, 5308` replaces them (English names of the usual warrior spells, or spell
-  IDs; 10 at most), `/duo panneau sorts` lists them with their numbers, `/duo panneau defaut` restores them.
-- **Automatisme > DuoRelay > Icones par rangee**: icons per row (1 to 10, 10 by default = one row);
-  4 with 8 spells gives 2 rows of 4.
+  **6** Heroic Strike, **7** Cleave, **8** Hamstring, **9** Intimidating Shout, **10** Interagir (the warrior's
+  interact key, T: not a spell, so no cooldown and no blink), **11** Challenging Shout. After a DuoBox update that
+  adds icons, `/duo panneau defaut` on the priest takes the new list (the saved list is kept otherwise).
+  `/duo panneau sorts Victory Rush, Slam, 5308, interact` replaces them (English names of the usual warrior spells,
+  spell IDs, or `interact`; 12 at most), `/duo panneau sorts` lists them with their numbers, `/duo panneau defaut`
+  restores them.
+- **Show or hide icons**: at the bottom of **Automatisme**, "Icones du panneau des sorts du guerrier" has one box
+  per icon of the list. Unticked, the icon leaves the panel and the others close the gap, but every icon keeps its
+  number, so `DuoRelay.json` stays the same. `/duo panneau sorts` marks the hidden ones `(masque)`.
+- **Automatisme > DuoRelay > Icones par rangee**: icons per row (1 to 12, 12 by default = one row);
+  4 with 8 spells gives 2 rows of 4. Hidden icons take no place.
+- **Blinking icons**: Overpower, Execute and Victory Rush (and Revenge if it is in the panel) blink as soon as the
+  warrior's game lights them up, **yellow** when castable, **blue** when lit but short of rage. Same detection as
+  the event light (section 3, "Event light"): its option must stay on on the warrior (on by default); the panel
+  blinks even when the priest hides the event light.
 - **Cooldowns on the icons (estimated)**: a swipe and a countdown as on the action bars (the numbers follow the
   game's own "show cooldown numbers" option). This client hides cooldowns from addons in combat (checked on the
   warrior 2026-11-07), and the priest's client sees the warrior's casts without their spell. So the warrior's
@@ -725,7 +743,8 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
   Each icon shows its spell's own cooldown, or the global cooldown (1.5 s, after any warrior spell on it) when that
   one ends later. Heroic Strike and Cleave are off the global cooldown. The cooldown's length: read from the game
   when it shows it (out of combat), else the length read out of combat earlier in the session, the game's base
-  value, the spell's tooltip, and last DuoBox's table (Overpower 5 s, Thunder Clap 4 s, Intimidating Shout 3 min).
+  value, the spell's tooltip, and last DuoBox's table (Overpower 5 s, Thunder Clap 4 s, Intimidating Shout 3 min,
+  Challenging Shout 10 min).
   Not seen: resets and reductions in a fight (talents, procs), casts while the panel is hidden; addon messages
   may be blocked in some instances. Needs the same DuoBox version on both characters (`/reload` on both).
   `/duo panneau cd`: clock offset and round trip, last cast received and where its length came from.
@@ -738,7 +757,7 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
   the picture, and the clicks on the icons do nothing.
 - The icon number is the `"pixel"` of a trigger in `DuoRelay.json`, which holds the key PC 2 presses: keep both
   lists in the same order. Default triggers, read from the warrior's key bindings and combat journal (Execute and
-  Intimidating Shout: their bar slot told by the user) on 2026-11-07:
+  Intimidating Shout: their bar slot told by the user; Challenging Shout: its key told by the user) on 2026-11-07:
 
 | Icon | Spell | Key on PC 2 | Action bar slot |
 |---|---|---|---|
@@ -751,6 +770,8 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
 | 7 | Cleave | `Shift+C` | 80 (Battle Stance page of the main bar, button 8) |
 | 8 | Hamstring | `4` | 76 (Battle Stance page of the main bar, button 4) |
 | 9 | Intimidating Shout | `W` | 68 (Action Bar 2 = bottom left bar, button 8) |
+| 10 | Interagir | `T` | none: the interact key (INTERACTTARGET), what it takes on the warrior (NPC, object, or its enemy target) |
+| 11 | Challenging Shout | `Shift+3` | the button the user bound to Shift+3 (the warrior's saved bindings of 2026-11-06 had none on it) |
 
 - Main bar keys (`F4`, `5`, `C`, `1`, `Shift+C`, `4`) press the Battle Stance page: in another stance they press
   that stance's button.

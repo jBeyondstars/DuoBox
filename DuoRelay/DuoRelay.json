@@ -88,6 +88,20 @@
       "pixel": 9,
       "keys": "W",
       "delayMs": 0
+    },
+    {
+      "name": "interactkey",
+      "label": "panel icon 10: Interagir, the warrior's interact key T (INTERACTTARGET)",
+      "pixel": 10,
+      "keys": "T",
+      "delayMs": 0
+    },
+    {
+      "name": "challengingshout",
+      "label": "panel icon 11: Challenging Shout, action bar key Shift+3 (the user's binding)",
+      "pixel": 11,
+      "keys": "SHIFT-3",
+      "delayMs": 0
     }
   ],
   "delayMs": 150,

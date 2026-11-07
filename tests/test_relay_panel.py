@@ -29,7 +29,7 @@ end
 SPELLS = {[402927] = {"Victory Rush", 132342}, [1240193] = {"Slam", 132340}, [5308] = {"Execute", 135358},
           [6343] = {"Thunder Clap", 136105}, [7384] = {"Overpower", 132223}, [78] = {"Heroic Strike", 132282},
           [845] = {"Cleave", 132338}, [1715] = {"Hamstring", 132316}, [7386] = {"Sunder Armor", 132363},
-          [772] = {"Rend", 132155}, [355] = {"Taunt", 136080}}
+          [772] = {"Rend", 132155}, [355] = {"Taunt", 136080}, [1161] = {"Challenging Shout", 132091}}
 ns = {DEFAULTS = {relayPanelSpells = "402927,1240193,5308,6343,7384"}}
 function ns.GetDB() return db end
 function ns.Print(msg) table.insert(printed, msg) end
@@ -66,6 +66,16 @@ function cdOf(i)
     if not c.cdStart or c.cdDur == 0 then return "none" end
     return ("%.3f/%.3f"):format(c.cdStart, c.cdDur)
 end
+-- Party units: power type (0 mana, 1 rage), power and its maximum
+units = {party1 = {exists = true, ptype = 1, power = 45, max = 100}}
+function UnitExists(u) return units[u] ~= nil and units[u].exists end
+function UnitPowerType(u) return units[u] and units[u].ptype end
+function UnitPower(u) return units[u] and units[u].power end
+function UnitPowerMax(u) return units[u] and units[u].max end
+function powerBar() for _, f in ipairs(frames) do if f.kind == "StatusBar" then return f end end end
+function unitEvent(event, unit) for _, f in ipairs(frames) do
+    if f.events[event] then f.scripts.OnEvent(f, event, unit) end
+end end
 
 local Region = {}
 Region.__index = Region
@@ -103,11 +113,28 @@ function Region:RegisterUnitEvent(e, unit) self.events[e] = unit end
 function Region:SetCooldown(start, dur) self.cdStart, self.cdDur = start, dur end
 function Region:Clear() self.cdStart, self.cdDur = nil, nil end
 function Region:SetHideCountdownNumbers(v) self.hideNumbers = v end
+function Region:SetStatusBarTexture(t) self.barTexture = t end
+function Region:SetStatusBarColor(r, g, b) self.barColor = ("%g,%g,%g"):format(r, g, b) end
+function Region:SetMinMaxValues(a, b) self.minV, self.maxV = a, b end
+function Region:SetValue(v) self.value = v end
+-- the game formats hidden values itself; here they are only kept
+function Region:SetFormattedText(fmt, v) self.text = issecretvalue(v) and v or fmt:format(v) end
 function Region:CreateTexture() local t = New(self); table.insert(textures, t); return t end
-function Region:CreateFontString() return New(self) end
+function Region:CreateFontString() local t = New(self); table.insert(fontStrings, t); return t end
+fontStrings = {}
+function barText() for _, t in ipairs(fontStrings) do if t.parent == powerBar() then return t.text end end end
+function Region:GetFrameLevel() return 1 end
+function Region:SetBlendMode(m) self.blend = m end
+function Region:SetVertexColor(r, g, b) self.vertex = ("%g,%g,%g"):format(r, g, b) end
+function Region:CreateAnimationGroup() local g = New(self); g.playing = false; return g end
+function Region:CreateAnimation() return New(self) end
+function Region:SetLooping(l) self.looping = l end
+function Region:Play() self.playing = true end
+function Region:Stop() self.playing = false end
+function Region:IsPlaying() return self.playing end
 for _, m in ipairs({"SetFrameStrata", "SetFrameLevel", "SetMovable", "SetClampedToScreen", "EnableMouse",
     "RegisterForDrag", "StartMoving", "StopMovingOrSizing", "SetUserPlaced", "SetHighlightTexture",
-    "SetPushedTexture", "SetTexCoord"}) do
+    "SetPushedTexture", "SetTexCoord", "SetFromAlpha", "SetToAlpha", "SetDuration"}) do
     Region[m] = function() end
 end
 UIParent = New(nil)
@@ -237,6 +264,81 @@ class RelayPanelTest(unittest.TestCase):
             assert(not sig.shown and not tip.shown)
         ''')
 
+    def test_interact_entry_is_a_key_not_a_spell(self):
+        self.load('db.relayPanelSpells = "7384,interact"')
+        self.run_lua('''
+            local b = icons()
+            assert(shownIcons() == 2 and b[2].action == "interact" and b[2].spell == nil)
+            assert(b[2].icon.texture == "Interface\\\\CURSOR\\\\Interact", b[2].icon.texture)
+            enter(2)
+            assert(signal().shown) -- its code is drawn like a spell's: DuoRelay presses T
+            assert(tip.lines[1] == "Interagir" and tip.lines[3]:find('"pixel": 2', 1, true), tip.lines[3])
+            leave(2)
+            ns.OnPartnerProcs({{id = 7384, ready = true}})
+            assert(b[1].glow.shown and not b[2].glow.shown) -- no blink, no cooldown for a key
+            assert(cdOf(2) == "none")
+            ns.RelayPanelCommand("sorts Slam, Interagir")
+            assert(db.relayPanelSpells == "1240193,interact", db.relayPanelSpells)
+            assert(last():find("1 Slam, 2 Interagir", 1, true), last())
+        ''')
+
+    def test_hidden_icons_keep_their_number(self):
+        self.load('db.relayPanelSpells = "402927,1240193,5308,interact"')
+        self.run_lua('''
+            local b = icons()
+            ns.SetRelayPanelHidden(1240193, true)                  -- Options > Automatisme, box 2 unticked
+            assert(db.relayPanelHidden == "1240193", db.relayPanelHidden)
+            assert(shownIcons() == 3 and not b[2].shown)
+            assert(panel().w == 3 * 36 + 2 * 4, panel().w)        -- no hole
+            assert(b[3].point[2] == 40 and b[4].point[2] == 80)   -- Execute takes Slam's place...
+            enter(3)
+            assert(tip.lines[1]:find('"pixel": 3', 1, true), tip.lines[1]) -- ...and stays icon 3 for DuoRelay
+            leave(3)
+            ns.SetRelayPanelHidden("interact", true)
+            assert(db.relayPanelHidden == "1240193,interact", db.relayPanelHidden)
+            local list = ns.RelayPanelEntries()
+            assert(#list == 4 and list[4].name == "Interagir" and list[4].hidden and list[2].hidden and not list[1].hidden)
+            assert(list[1].icon == 132342 and list[4].icon == "Interface\\\\CURSOR\\\\Interact")
+            ns.RelayPanelCommand("sorts"); assert(last():find("2 Slam (masque), 3 Execute", 1, true), last())
+            ns.SetRelayPanelHidden(1240193, false)
+            assert(db.relayPanelHidden == "interact" and shownIcons() == 3 and b[2].shown and b[3].point[2] == 80)
+            for _, id in ipairs({402927, 1240193, 5308}) do ns.SetRelayPanelHidden(id, true) end
+            assert(not panel().shown)                              -- nothing left to show
+            ns.Set("relayPanelSpells", "402927")                   -- entries gone from the list drop out
+            ns.SetRelayPanelHidden(402927, false)
+            assert(db.relayPanelHidden == "" and panel().shown and shownIcons() == 1)
+        ''')
+
+    def test_lit_spells_blink(self):
+        self.load()
+        self.run_lua('''
+            local b = icons() -- 1 Victory Rush, 2 Slam, 3 Execute, 4 Thunder Clap, 5 Overpower
+            assert(not b[5].glow.shown and not b[5].blink.playing)
+            ns.OnPartnerProcs({{id = 7384, ready = true}, {id = 5308, ready = false}})
+            assert(b[5].glow.shown and b[5].blink.playing and b[5].glow.vertex == "1,0.9,0.2") -- ready: yellow
+            assert(b[3].glow.shown and b[3].glow.vertex == "0.3,0.55,1") -- short of rage: blue
+            assert(not b[1].glow.shown and not b[2].glow.shown)
+            ns.Set("relayPanelSpells", "7384,402927") -- list changed: the blink follows the spell
+            assert(b[1].glow.shown and not b[2].glow.shown and not b[3].glow.shown)
+            ns.OnPartnerProcs({{id = 402927, ready = true}})
+            assert(b[2].blink.playing and not b[1].blink.playing and not b[1].glow.shown)
+            ns.OnPartnerProcs({}) -- everything out
+            assert(not b[2].glow.shown and not b[2].blink.playing)
+        ''')
+
+    def test_option_hides_the_spell_tooltips_but_keeps_the_code(self):
+        self.load()
+        self.run_lua('''
+            db.relayPanelTooltip = false
+            tip.spell, tip.shown = nil, false
+            enter(2)
+            assert(signal().shown) -- the click still works
+            assert(not tip.shown and tip.spell == nil)
+            leave(2)
+            db.relayPanelTooltip = true
+            enter(2); assert(tip.shown and tip.spell == 1240193)
+        ''')
+
     def test_code_matches_the_duorelay_scheme(self):
         self.load('db.relayPanelSpells = "78,845,1715,7386,772,355,402927,1240193,5308,6343"')
         # icon 1: A=1 (blue), 7-A=6 (yellow), B=1, 7-B=6
@@ -303,8 +405,10 @@ class RelayPanelTest(unittest.TestCase):
             assert(db.relayPanelSpells == "402927,1240193,6343")   -- unchanged
             assert(last():find("Frostbolt, 99999999", 1, true), last())
 
-            ns.RelayPanelCommand("sorts 78,845,1715,7386,772,355,402927,1240193,5308,6343,7384")
-            assert(db.relayPanelSpells == "402927,1240193,6343" and last():find("10 sorts au plus"), last())
+            ns.RelayPanelCommand("sorts 78,845,1715,7386,772,355,402927,1240193,5308,6343,7384,Challenging Shout,interact")
+            assert(db.relayPanelSpells == "402927,1240193,6343" and last():find("12 sorts au plus"), last())
+            ns.RelayPanelCommand("sorts 78,845,1715,7386,772,355,402927,1240193,5308,6343,7384,Challenging Shout")
+            assert(shownIcons() == 12 and db.relayPanelSpells:find(",1161$"), db.relayPanelSpells)
 
             ns.RelayPanelCommand("defaut")
             assert(db.relayPanelSpells == "402927,1240193,5308,6343,7384")
@@ -318,6 +422,39 @@ class RelayPanelTest(unittest.TestCase):
             ns.RelayPanelCommand("off"); assert(db.relayPanel == false and not panel().shown)
             ns.RelayPanelCommand("on"); assert(db.relayPanel == true)
             ns.RelayPanelCommand("nimporte"); assert(last():find("/duo panneau", 1, true))
+        ''')
+
+    def test_rage_bar_in_place_of_the_title(self):
+        self.load()
+        self.run_lua('''
+            local bar = powerBar()
+            assert(bar.parent.parent == panel(), "the bar is the drag strip's")
+            assert(bar.value == 45 and bar.minV == 0 and bar.maxV == 100, tostring(bar.value))
+            assert(barText() == "45", barText())
+            assert(bar.barColor == "1,0,0", bar.barColor) -- rage red
+            units.party1.power = 70
+            unitEvent("UNIT_POWER_FREQUENT", "target"); assert(bar.value == 45) -- another unit
+            unitEvent("UNIT_POWER_FREQUENT", "party1"); assert(bar.value == 70 and barText() == "70")
+        ''')
+
+    def test_rage_hidden_values_are_handed_over(self):
+        self.load()
+        self.run_lua('''
+            local bar = powerBar()
+            units.party1.power, units.party1.max = SECRET, SECRET -- hidden in combat: never compared here
+            unitEvent("UNIT_POWER_UPDATE", "party1")
+            assert(bar.value == SECRET and bar.maxV == SECRET and barText() == SECRET)
+            unitEvent("UNIT_POWER_UPDATE", SECRET) -- a hidden unit token: ignored, no error
+        ''')
+
+    def test_rage_bar_without_partner_and_for_a_hunter(self):
+        self.load("partner = nil")
+        self.run_lua('''
+            local bar = powerBar()
+            assert(bar.value == 0 and bar.maxV == 1 and barText() == "Guerrier")
+            partner = "party1"; units.party1.ptype = 0 -- a hunter: mana, blue
+            unitEvent("GROUP_ROSTER_UPDATE")
+            assert(bar.value == 45 and bar.barColor == "0,0.55,1", bar.barColor)
         ''')
 
 

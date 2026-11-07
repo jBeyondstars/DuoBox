@@ -14,8 +14,13 @@
 -- lost message is a missed press). Sent at once when a spell lights up or goes
 -- out, after 0.5 s for a ready / short-of-rage change, every 2 s while one is
 -- lit; a throttled send is retried on the next tick.
+-- Victory Rush (WoW Forever): the client calls it unusable even when it can be
+-- cast, so it is lit by the game's glow on it or by its "Victorious" buff
+-- (readable out of combat only: auras are hidden in combat), and reported out
+-- of combat too (its 20 s often start with the fight's last kill).
 -- Partner side: the first lit spell the options do not hide (DB.procOff, spell
--- IDs), the others listed under it; hidden after 3 s without news.
+-- IDs), the others listed under it; hidden after 3 s without news. The list
+-- also goes to ns.OnPartnerProcs (the spell panel of RelayPanel.lua blinks).
 -- /duo move: drag it, bottom-right corner to resize. /duo proc debug: what the
 -- client answers. Kept out of DuoBox.lua (Lua 5.1's 200 locals).
 --------------------------------------------------------------------------------
@@ -39,6 +44,8 @@ local PROCS = {
 		{ id = 7384, hint = "apres une esquive" },                 -- Overpower
 		{ id = 6572, hint = "apres blocage / esquive / parade" },  -- Revenge
 		{ id = 5308, hint = "cible sous 20 % de vie" },            -- Execute
+		-- Victory Rush: its glow or its "Victorious" buff (402975), in and out of combat
+		{ id = 402927, hint = "apres une victoire, 20 s", aura = 402975, anytime = true },
 	},
 	ROGUE = { { id = 14251, hint = "apres une parade" } },        -- Riposte
 	HUNTER = {
@@ -103,7 +110,7 @@ local function Learned()
 				local slot, bank = C_SpellBook.FindSpellBookSlotForSpell(name)
 				if slot then rankID = select(3, C_SpellBook.GetSpellBookItemType(slot, bank)) end
 			end
-			list[#list + 1] = { id = p.id, name = name, rankID = rankID }
+			list[#list + 1] = { id = p.id, name = name, rankID = rankID, aura = p.aura, anytime = p.anytime }
 		end
 	end
 	if #list > 0 then spells = list end -- spellbook not loaded yet: read it again next time
@@ -122,6 +129,12 @@ local function GlowRaw(s)
 	local glow = f(s.rankID or s.id)
 	if Val(glow) ~= true and s.rankID and s.rankID ~= s.id then glow = f(s.id) end
 	return glow
+end
+
+-- The buff that makes the spell castable (Victorious), nil without one; hidden in combat
+local function AuraRaw(s)
+	if not s.aura or not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return nil end
+	return C_UnitAuras.GetPlayerAuraBySpellID(s.aura)
 end
 
 -- Seconds left on the spell's own cooldown (0: none, or only the global cooldown)
@@ -143,17 +156,21 @@ local function State(s)
 	local usable, noPower = UsableRaw(s.name)
 	usable, noPower = Val(usable), Val(noPower)
 	local glow = Val(GlowRaw(s)) == true
-	if not usable and not noPower and not glow then return nil end
+	local buff = Val(AuraRaw(s)) ~= nil
+	if not usable and not noPower and not glow and not buff then return nil end
 	if CooldownLeft(s.name) > 0 then return nil end
 	return noPower and "p" or "u"
 end
 
+-- In combat every lit spell; out of combat only those marked anytime (Victory Rush)
 local function Code()
-	if not Val(UnitAffectingCombat("player")) then return "" end
+	local fighting = Val(UnitAffectingCombat("player"))
 	local parts = {}
 	for _, s in ipairs(Learned()) do
-		local state = State(s)
-		if state then parts[#parts + 1] = s.id .. state end
+		if fighting or s.anytime then
+			local state = State(s)
+			if state then parts[#parts + 1] = s.id .. state end
+		end
 	end
 	return table.concat(parts, ",")
 end
@@ -312,6 +329,7 @@ local function OnMessage(list)
 		received[#received + 1] = { id = tonumber(id), ready = state == "u" }
 	end
 	Render()
+	if ns.OnPartnerProcs then ns.OnPartnerProcs(received) end
 end
 
 local function DisplayTick()
@@ -331,6 +349,7 @@ local function DisplayTick()
 	if #received > 0 and GetTime() - receivedTime > STALE then
 		received = {}
 		Render()
+		if ns.OnPartnerProcs then ns.OnPartnerProcs(received) end
 	end
 end
 
@@ -363,8 +382,13 @@ function ns.ProcLightCommand(sub)
 	end
 	for _, s in ipairs(list) do
 		local usable, noPower = UsableRaw(s.name)
-		ns.Print(("%s (rang %s) : utilisable=%s manque de ressource=%s lueur=%s recharge=%.1f s -> %s"):format(s.name,
-			tostring(s.rankID), Show(usable), Show(noPower), Show(GlowRaw(s)), CooldownLeft(s.name),
+		local buff = ""
+		if s.aura then
+			local a = AuraRaw(s) -- the secret test first: a hidden aura must not be compared
+			buff = " buff=" .. ((issecretvalue and issecretvalue(a)) and "SECRET" or a ~= nil and "oui" or "non")
+		end
+		ns.Print(("%s (rang %s) : utilisable=%s manque de ressource=%s lueur=%s%s recharge=%.1f s -> %s"):format(s.name,
+			tostring(s.rankID), Show(usable), Show(noPower), Show(GlowRaw(s)), buff, CooldownLeft(s.name),
 			State(s) == "u" and "allume" or State(s) == "p" and "allume, pas assez de ressource" or "eteint"))
 	end
 	ns.Print(("combat=%s ; envoye : %s"):format(Show(UnitAffectingCombat("player")),

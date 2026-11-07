@@ -10,7 +10,7 @@ local _, ns = ...
 local function DB() return ns.GetDB() end
 local Print = ns.Print
 
-local WIDTH, HEIGHT = 540, 460
+local WIDTH, HEIGHT = 540, 540 -- 540 high: the warrior panel's icon list at the bottom of Automatisme
 local TABS = 6
 local COL2 = 240 -- x of the second column, inside a page
 
@@ -406,9 +406,11 @@ Toggle(auto, COL2, -42, "relayPanel", "Panneau des sorts du guerrier",
 	.. "Icone N = declencheur \"pixel\": N de DuoRelay.json. Fenetre ou plein ecran fenetre. "
 	.. "Recharges estimees sur les icones (le jeu les cache en combat) : meme version de DuoBox sur le guerrier. "
 	.. "/duo panneau sorts <liste> : changer les icones (GUIDE.md, section 7).")
-Slider(auto, COL2, -66, "relayPanelPerRow", "Icones par rangee (panneau guerrier)", 1, 10, 1, "%d",
+Slider(auto, COL2, -66, "relayPanelPerRow", "Icones par rangee (panneau guerrier)", 1, ns.RELAY_PANEL_MAX or 12, 1, "%d",
 	"Nombre d'icones sur chaque rangee du panneau des sorts du guerrier : 4 avec 8 sorts = 2 rangees de 4. "
-	.. "10 = une seule rangee.")
+	.. "12 = une seule rangee.")
+Toggle(auto, COL2, -112, "relayPanelTooltip", "Infobulles des sorts (panneau guerrier)",
+	"Decoche : survoler une icone du panneau n'affiche plus l'infobulle du sort. Le clic fonctionne pareil.")
 
 Header(auto, 0, -104, "Quetes")
 Toggle(auto, 0, -122, "autoShare", "Partager automatiquement les quetes acceptees",
@@ -453,6 +455,41 @@ end, "Prend le joueur cible comme tank.")
 Button(auto, 262, -281, 80, "Auto", function() ApplyTank("") end,
 	"Le membre du groupe au role Tank (clic droit sur son portrait > Role > Tank, ou appel aux roles).")
 local dungeonState = Note(auto, 0, -306, 450)
+
+-- One box per icon of the warrior's spell panel (/duo panneau sorts), 3 per row
+-- in panel order, the whole width (the left column's long labels cross COL2)
+Header(auto, 0, -340, "Icones du panneau des sorts du guerrier (decoche = masquee)")
+local relayBoxes = {}
+for i = 1, ns.RELAY_PANEL_MAX or 12 do
+	local cb = CheckBox(auto, ((i - 1) % 3) * 165, -358 - math.floor((i - 1) / 3) * 20, "")
+	cb:SetSize(20, 20)
+	cb.label:SetFontObject("GameFontHighlightSmall")
+	cb:SetScript("OnClick", function(self) ns.SetRelayPanelHidden(self.entry, not self:GetChecked()) end)
+	cb:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText(self.name or "")
+		GameTooltip:AddLine(("Coche : l'icone %d est dans le panneau. Decoche : masquee ; les autres icones "
+			.. "gardent leur numero (\"pixel\" de DuoRelay.json). /duo panneau sorts : changer la liste.")
+			:format(self.index or 0), 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	cb:SetScript("OnLeave", GameTooltip_Hide)
+	cb:Hide()
+	relayBoxes[i] = cb
+end
+controls[#controls + 1] = { Refresh = function()
+	local list = ns.RelayPanelEntries and ns.RelayPanelEntries() or {}
+	for i, cb in ipairs(relayBoxes) do
+		local e = list[i]
+		cb:SetShown(e ~= nil)
+		if e then
+			cb.entry, cb.name, cb.index = e.entry, e.name, i
+			cb.label:SetText(("%d |T%s:0|t %s"):format(i, e.icon or "Interface\\Icons\\INV_Misc_QuestionMark", e.name))
+			cb:SetHitRectInsets(0, -(cb.label:GetStringWidth() + 4), 0, 0)
+			cb:SetChecked(not e.hidden)
+		end
+	end
+end }
 
 --------------------------------------------------------------------------------
 -- Page 4: Display
