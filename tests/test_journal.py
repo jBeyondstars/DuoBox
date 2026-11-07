@@ -85,6 +85,8 @@ function Obj()
 end
 function CreateFrame(_, name) local f = Obj(); table.insert(frames, f); if name then _G[name] = f end; return f end
 DuoBoxBtnAssist = Obj()
+DuoBoxBtnRotation = Obj() -- acts on the key going down and on its release
+function DuoBoxBtnRotation:GetAttribute(k) return k == "pressAndHoldAction" or nil end
 
 function ev() return frames[2] end -- clock, events
 function event(name, ...) ev().scripts.OnEvent(ev(), name, ...) end
@@ -184,10 +186,12 @@ class JournalTest(unittest.TestCase):
             UseAction(145); UseAction(3); AssistUnit("party1")
             cvars.SoftTargetInteract = "0"; C_PlayerInteractionManager.InteractUnit("anyinteract")
             DuoBoxBtnAssist.hooks.OnClick(DuoBoxBtnAssist, "LeftButton")
+            DuoBoxBtnRotation.hooks.OnClick(DuoBoxBtnRotation, "LeftButton", true)
+            DuoBoxBtnRotation.hooks.OnClick(DuoBoxBtnRotation, "LeftButton", false) -- its release: same press
         ''')
         got = [c for c in self.codes() if c[0] in "KX"]
         self.assertEqual(got, ["K|A|145|macro|D-ChargeP", "K|A|3|spell|Heroic Strike", "X|AssistUnit|party1",
-                               "K|I|anyinteract|0", "K|B|Assist|LeftButton"])
+                               "K|I|anyinteract|0", "K|B|Assist|LeftButton", "K|B|Rotation|LeftButton"])
 
     def test_errors_spells_emotes_and_enemy_count(self):
         self.start()

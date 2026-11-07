@@ -16,7 +16,10 @@
 -- its end); its right-click goes back to single target.
 -- The game runs only the first 255 characters of a button's macro (measured in game on
 -- 2026-11-06: with 4 "once per fight" lines, Overpower and Heroic Strike were never tried).
--- A longer macro moves its "once per fight" lines to hidden buttons it /clicks first.
+-- So a press runs two macros of the same button: the attacks when the key goes down,
+-- the "once per fight" buffs when it is released (Blizzard's press-and-hold release
+-- action). A macro run by /click from another macro did nothing on this client
+-- (tested 2026-11-06), hence no hidden button.
 -- Kept out of DuoBox.lua: its main chunk is close to Lua 5.1's 200 locals.
 --------------------------------------------------------------------------------
 
@@ -25,15 +28,52 @@ local _, ns = ...
 local REFRESH = 30 -- seconds left under which a "once per fight" buff counts as missing
 local MAX_STEPS = 10
 local MAX_LEN = 255 -- characters of a button's macro the game runs, the rest is dropped
-local ONCE_BUTTON = "DuoBoxRotOnce" -- + number: hidden buttons running the "once per fight" lines
+local RELEASE = "*macrotext1" -- macro of the key release (left button, any modifier)
+-- One macro run tries only ONE spell on the global cooldown: the first of its lines that the
+-- game tries, even when it fails or is skipped as unusable; spells off the global cooldown
+-- (Heroic Strike, Cleave, Bloodrage) are tried anyway (combat log 2026-11-07: Overpower skipped
+-- without a dodge, then a Slam line after it never tried, even with 53 rage; Rend failing for
+-- rage on the release, then no Victory Rush). A priority list of such attacks cannot work, and
+-- no code can pick one by the target's health at the press: the secure snippet that runs then
+-- sees neither health nor usability (RestrictedEnvironment.lua). So the key down has one macro
+-- per attack on the global cooldown, that attack first, then the spells off it, and a secure
+-- snippet (SNIPPET) sends each press to the next one: Overpower, Execute, Slam... take turns, and
+-- the game itself gates Overpower (after a dodge) and Execute (under 20%). Chosen by the user on
+-- 2026-11-07. The key release, a run of its own, casts the buffs, then Victory Rush.
+-- Spells a macro /cast never casts on WoW Forever: the client calls them unusable (Victory Rush
+-- even during its "Victorious" buff, Slam in combat) and skips them without a word, while an
+-- action-bar key sends them and the server accepts. The Rotation uses their action-bar slot
+-- instead: "/click" on a hidden action button (tested in game 2026-11-06 with a /click
+-- ActionButton5 macro). Such a click takes the run's turn even when the spell cannot be cast:
+-- Victory Rush ends the key release, after the buffs; Slam leads a key-down macro of its own.
+-- [spell ID] = { hidden button name, "release" (end of the key release) or "down" (key down) }
+local VIA_BAR = {
+	[402927] = { "DuoBoxRotVictoryRush", "release" }, -- Victory Rush (Season of Discovery spell)
+	[1240193] = { "DuoBoxRotSlam", "down" },           -- Slam, WoW Forever's version, cast time
+}
+-- Spells off the global cooldown, tried on every press whatever comes before them (next-swing
+-- attacks, Bloodrage): rank 1 IDs, compared by name (any rank)
+local OFF_GCD = { 78, 845, 6807, 2973, 2687 } -- Heroic Strike, Cleave, Maul, Raptor Strike, Bloodrage
+-- Secure snippet run on every click of the Rotation button, before it acts (SecureHandlerWrapScript,
+-- restricted environment): sends a key going down to the next key-down macro of the mode,
+-- "*macrotext-s<n>" (single target) or "*macrotext-a<n>" (multi target, set by the Multi button)
+local SNIPPET = [[
+	if not down or button ~= "LeftButton" then return end
+	local mode = self:GetAttribute("rot-mode") == "aoe" and "a" or "s"
+	local count = self:GetAttribute("rot-count-" .. mode) or 1
+	local index = (self:GetAttribute("rot-index") or 0) % count + 1
+	self:SetAttribute("rot-index", index)
+	return mode .. index
+]]
 local BATTLE_SHOUT = 6673
 local QUESTION = "Interface\\Icons\\INV_Misc_QuestionMark"
 -- Default list of each class (empty for the others). Warrior: Battle Shout once per fight,
--- Overpower (after a dodge), Thunder Clap in multi-target mode, Heroic Strike
+-- Thunder Clap in multi-target mode (above Overpower, which would otherwise take the press's
+-- one try on the global cooldown), Overpower (after a dodge), Heroic Strike (off it)
 local DEFAULTS = {
-	WARRIOR = { { id = BATTLE_SHOUT, once = true }, { id = 7384 }, { id = 6343, when = "aoe" }, { id = 78 } },
+	WARRIOR = { { id = BATTLE_SHOUT, once = true }, { id = 6343, when = "aoe" }, { id = 7384 }, { id = 78 } },
 }
-local DEFAULT_TIP = { WARRIOR = "Cri de guerre (1x par combat), Fulgurance, Coup de tonnerre (multi seulement), Frappe heroique." }
+local DEFAULT_TIP = { WARRIOR = "Cri de guerre (1x par combat), Coup de tonnerre (multi seulement), Fulgurance, Frappe heroique." }
 -- Line after the target lines: auto attack for melee classes, the pet for pet classes, nothing for casters
 local ATTACK = { WARRIOR = "/startattack", ROGUE = "/startattack", PALADIN = "/startattack", SHAMAN = "/startattack",
 	DRUID = "/startattack", HUNTER = "/petattack", WARLOCK = "/petattack" }
@@ -73,66 +113,113 @@ local function Usable(s, aoe)
 	return not s.off and ns.Known(s.id) and (ns.SpellNameIcon(s.id)) or nil
 end
 
--- Lines of the macro, in two parts: the "once per fight" buffs to cast, then the target, the
--- attack and the "each press" spells. all = true: every buff, as if missing (longest macro).
+-- Action-bar slot holding a VIA_BAR spell, nil when it is on no bar (any slot works, whatever
+-- the page or the stance shows: the hidden button uses the slot itself)
+local function BarSlot(id)
+	if not VIA_BAR[id] or not GetActionInfo then return nil end
+	for slot = 1, 180 do
+		local kind, actionID = GetActionInfo(slot)
+		if kind == "spell" and actionID == id then return slot end
+	end
+	-- Same spell under another ID on the bar (a rank, WoW Forever's own version of a spell)
+	local name = ns.SpellNameIcon(id)
+	for slot = 1, 180 do
+		local kind, actionID = GetActionInfo(slot)
+		if kind == "spell" and name and ns.SpellNameIcon(actionID) == name then return slot end
+	end
+end
+
+-- A VIA_BAR "each press" spell on a bar for the key release (for both modes: the Multi button
+-- swaps only the key-down macro; for one mode only, it ends the key-down macro instead)
+local function Late(s)
+	return VIA_BAR[s.id] ~= nil and VIA_BAR[s.id][2] == "release" and not s.once and not s.when
+		and BarSlot(s.id) ~= nil
+end
+
+local function Click(id) return "/click " .. VIA_BAR[id][1] end
+
+local offGcdNames -- [name] = true, from OFF_GCD
+local function OffGcd(id)
+	if not offGcdNames then
+		local names = {}
+		for _, x in ipairs(OFF_GCD) do
+			local name = ns.SpellNameIcon(x)
+			if name then names[name] = true end
+		end
+		if not next(names) then return false end -- spell data not loaded yet: ask again later
+		offGcdNames = names
+	end
+	local name = ns.SpellNameIcon(id)
+	return name ~= nil and offGcdNames[name] == true
+end
+
+-- The macros of a press: the key going down, one per attack on the global cooldown (a list of
+-- texts; target, auto attack, that attack, then the spells off the global cooldown), and its
+-- release (the "once per fight" buffs to cast, then Victory Rush; "" if none). In mode aoe.
+-- all = true: every buff, as if missing (the longest macros, for the panel).
 -- fight = true: built on PLAYER_REGEN_DISABLED and kept for the whole fight. A plain /cast of
 -- a buff would then fire on every press: /castsequence casts it once, and "null" (no such
--- spell) holds the sequence until reset=combat, at the end of the fight. Both modes share
--- the same line, so switching to multi target does not shout twice.
-local function Lines(fight, aoe, all)
-	local once, main = {}, {}
+-- spell) holds the sequence until reset=combat, at the end of the fight.
+-- The Multi button swaps only the key-down macro, so a buff for one mode only ("multi only",
+-- "single only") stays at its top; the release holds the buffs of both modes, the same in
+-- both, so switching to multi target does not shout twice. A VIA_BAR spell for the release
+-- comes after the buffs, on a live enemy target only (see VIA_BAR).
+-- hp: health of the target (TargetHealth); a step with minHP above it stays out (Rend on a mob
+-- about to die), decided as the fight starts since the macro cannot change during it.
+local function Macro(fight, aoe, all, hp)
+	local head, release, late, leads, extras = {}, {}, {}, {}, {}
+	local function Use(s)
+		if not all and s.minHP and hp and hp < s.minHP then return nil end
+		return Usable(s, aoe)
+	end
 	for _, s in ipairs(Steps()) do
-		local name = s.once and (all or needed[s.id]) and Usable(s, aoe)
+		local name = s.once and (all or needed[s.id]) and Use(s)
 		if name then
-			once[#once + 1] = fight and ("/castsequence reset=combat %s, null"):format(name) or ("/cast " .. name)
+			local lines = s.when and head or release
+			lines[#lines + 1] = fight and ("/castsequence reset=combat %s, null"):format(name) or ("/cast " .. name)
 		end
 	end
 	-- Keep your own live enemy target, otherwise take the partner's (the tank's in dungeon mode)
-	main[1] = "/assist [noharm][dead] " .. ns.AssistUnit()
-	main[2] = "/stopmacro [noharm][dead]"
-	main[3] = ((ns.STOP_FOLLOW .. (ATTACK[Class()] or "")):gsub("\n$", ""))
+	head[#head + 1] = "/assist [noharm][dead] " .. ns.AssistUnit()
+	head[#head + 1] = "/stopmacro [noharm][dead]"
+	head[#head + 1] = ((ns.STOP_FOLLOW .. (ATTACK[Class()] or "")):gsub("\n$", ""))
 	for _, s in ipairs(Steps()) do
-		local name = not s.once and Usable(s, aoe)
-		if name then main[#main + 1] = "/cast " .. name end
-	end
-	return once, main
-end
-
--- Lines joined into texts of MAX_LEN characters at most
-local function Pack(lines)
-	local texts = {}
-	for _, line in ipairs(lines) do
-		local last = texts[#texts]
-		if last and #last + 1 + #line <= MAX_LEN then
-			texts[#texts] = last .. "\n" .. line
-		else
-			texts[#texts + 1] = line
+		local name = not s.once and Use(s)
+		if name and Late(s) then
+			late[#late + 1] = Click(s.id)
+		elseif name then
+			local line = BarSlot(s.id) and Click(s.id) or ("/cast " .. name)
+			if OffGcd(s.id) then extras[#extras + 1] = line else leads[#leads + 1] = line end
 		end
 	end
-	return texts
-end
-
--- The Rotation macro. Over MAX_LEN characters the game would drop its last lines, the attacks
--- (Heroic Strike first): its "once per fight" lines then go to hidden buttons it /clicks first,
--- in the same order. hidden: texts of those buttons by number, filled here; share it between
--- both modes so that the same lines get the same button.
-local function Build(fight, aoe, hidden, all)
-	local once, main = Lines(fight, aoe, all)
-	local text = table.concat(once, "\n") .. (#once > 0 and "\n" or "") .. table.concat(main, "\n")
-	if #text <= MAX_LEN or #once == 0 then return text end
-	local clicks = {}
-	for _, part in ipairs(Pack(once)) do
-		local n = #hidden + 1
-		for i, t in ipairs(hidden) do
-			if t == part then n = i end
-		end
-		hidden[n] = part
-		clicks[#clicks + 1] = "/click " .. ONCE_BUTTON .. n
+	local downs = {}
+	if #leads == 0 then leads[1] = false end
+	for _, lead in ipairs(leads) do
+		local lines = { table.concat(head, "\n") }
+		if lead then lines[#lines + 1] = lead end
+		for _, line in ipairs(extras) do lines[#lines + 1] = line end
+		downs[#downs + 1] = table.concat(lines, "\n")
 	end
-	return table.concat(clicks, "\n") .. "\n" .. table.concat(main, "\n")
+	if #late > 0 then
+		release[#release + 1] = "/stopmacro [noharm][dead]"
+		for _, line in ipairs(late) do release[#release + 1] = line end
+	end
+	return downs, table.concat(release, "\n")
 end
 
-local function Macro(fight, aoe) return Build(fight, aoe, {}) end
+-- Health of the enemy the Rotation is about to attack: your live enemy target, otherwise the
+-- partner's (the tank's in dungeon mode). nil = no such enemy, or health unreadable (secret
+-- values in instances, or only a percentage: a maximum of 100).
+local function TargetHealth()
+	if not (UnitExists and UnitHealth and UnitHealthMax) then return nil end
+	for _, unit in ipairs({ "target", ns.AssistUnit() .. "target" }) do
+		if Val(UnitExists(unit)) and Val(UnitCanAttack("player", unit)) and not Val(UnitIsDead(unit)) then
+			local hp, max = Val(UnitHealth(unit)), Val(UnitHealthMax(unit))
+			if type(hp) == "number" and type(max) == "number" and max > 100 then return hp end
+			return nil
+		end
+	end
+end
 
 -- Icon of the next action: a buff still to cast, otherwise the first attack of the list
 local function Icon(aoe)
@@ -146,11 +233,12 @@ local function Icon(aoe)
 	return attack and select(2, ns.SpellNameIcon(attack)) or QUESTION
 end
 
--- The Rotation macro is the multi-target one the Multi button set (and the two differ)
+local modesDiffer = false -- the multi-target macros differ from the single-target ones (Update)
+
+-- Multi-target mode, set by the Multi button (and the macros of the two modes differ)
 local function MultiActive()
 	if not multi then return false end
-	local aoe = multi:GetAttribute("attribute-value")
-	return aoe ~= multi:GetAttribute("attribute-value2") and button:GetAttribute("macrotext") == aoe
+	return modesDiffer and button:GetAttribute("rot-mode") == "aoe"
 end
 
 local shownMulti = false
@@ -173,41 +261,58 @@ local function SetIfChanged(frame, key, value)
 	if frame:GetAttribute(key) ~= value then frame:SetAttribute(key, value) end
 end
 
-local hiddenButtons = {} -- [number] = hidden button of the "once per fight" lines (Build)
+local barButtons = {} -- [spellID] = hidden action button of a VIA_BAR spell
 
--- Out of combat only: secure buttons and their attributes
-local function SetHidden(texts)
-	for n, text in ipairs(texts) do
-		local b = hiddenButtons[n]
-		if not b then
-			-- Not anchored: never drawn nor under the mouse, /click still reaches it
-			b = CreateFrame("Button", ONCE_BUTTON .. n, UIParent, "SecureActionButtonTemplate")
-			b:SetAttribute("type", "macro")
-			-- /click sends a release (down = false): act on it whatever ActionButtonUseKeyDown says
-			b:SetAttribute("useOnKeyDown", false)
-			b:RegisterForClicks("AnyUp")
-			hiddenButtons[n] = b
+-- Out of combat only: the hidden buttons the macros /click, on the current slot of their spell
+local function SetBarButtons()
+	for _, s in ipairs(Steps()) do
+		local slot = BarSlot(s.id)
+		if slot then
+			local b = barButtons[s.id]
+			if not b then
+				-- Not anchored: never drawn nor under the mouse, /click still reaches it (a /click typed
+				-- in the chat cast Victory Rush through it, 2026-11-07)
+				b = CreateFrame("Button", VIA_BAR[s.id][1], UIParent, "SecureActionButtonTemplate")
+				b:SetAttribute("type", "action")
+				-- /click sends a release (down = false): act on it whatever ActionButtonUseKeyDown says
+				b:SetAttribute("useOnKeyDown", false)
+				b:RegisterForClicks("AnyUp")
+				barButtons[s.id] = b
+			end
+			SetIfChanged(b, "action", slot)
 		end
-		SetIfChanged(b, "macrotext", text)
 	end
 end
 
 -- ended = true on PLAYER_REGEN_ENABLED: the multi-target mode stops with the fight
 local function Update(fight, ended)
 	if not button or InCombatLockdown() then return end
-	-- Multi pressed out of combat: kept for the next fight, until its end
-	local armed = not ended and MultiActive()
-	local hidden = {}
-	local single, aoe = Build(fight, false, hidden), Build(fight, true, hidden)
-	SetHidden(hidden)
-	local text = armed and aoe or single
-	-- Compared with the attribute, not a copy: the Multi button changes it
-	if button:GetAttribute("macrotext") ~= text then
-		button:SetAttribute("macrotext", text)
-		if panel and panel:IsShown() then RefreshPanel() end
+	SetBarButtons() -- before the macros that /click them
+	-- Out of combat: the target of now (every 0.3 s); on PLAYER_REGEN_DISABLED: kept for the fight
+	local hp = TargetHealth()
+	local singles, release = Macro(fight, false, nil, hp)
+	local aoes = Macro(fight, true, nil, hp)
+	modesDiffer = table.concat(singles, "\0") ~= table.concat(aoes, "\0")
+	-- The Multi button sets "rot-mode"; pressed out of combat, it is kept for the next fight
+	local mode = not ended and button:GetAttribute("rot-mode") == "aoe" and "aoe" or "single"
+	SetIfChanged(button, "rot-mode", mode)
+	local changed = button:GetAttribute(RELEASE) ~= release
+	-- No buff: "" (Blizzard's no-op value) for both, so the release does not fall back on the
+	-- key-down macro ("macrotext")
+	SetIfChanged(button, "*typerelease1", release ~= "" and "macro" or "")
+	SetIfChanged(button, RELEASE, release)
+	-- The key-down macros SNIPPET takes turns between ("-s<n>" / "-a<n>" button names)
+	for i, text in ipairs(singles) do
+		if button:GetAttribute("*macrotext-s" .. i) ~= text then button:SetAttribute("*macrotext-s" .. i, text); changed = true end
 	end
-	SetIfChanged(multi, "attribute-value", aoe)     -- left click / key: multi target
-	SetIfChanged(multi, "attribute-value2", single) -- right click: back to single target
+	for i, text in ipairs(aoes) do
+		if button:GetAttribute("*macrotext-a" .. i) ~= text then button:SetAttribute("*macrotext-a" .. i, text); changed = true end
+	end
+	SetIfChanged(button, "rot-count-s", #singles)
+	SetIfChanged(button, "rot-count-a", #aoes)
+	-- Plain macro, the first one of the mode: a press SNIPPET does not route (no secure handlers)
+	SetIfChanged(button, "macrotext", (mode == "aoe" and aoes or singles)[1])
+	if changed and panel and panel:IsShown() then RefreshPanel() end
 	ShowMode()
 end
 
@@ -347,11 +452,25 @@ end)
 local WHEN_LABEL = { aoe = "multi seulement", single = "mono seulement" }
 
 local function StepLines(tt, aoe)
+	local turns = #(Macro(false, aoe or false)) -- key-down macros taking turns in this mode
 	for i, s in ipairs(Steps()) do
 		local skipped = s.off or not ns.Known(s.id) or (aoe ~= nil and not Usable(s, aoe))
 		local grey = skipped and 0.5 or 1
 		local state = s.off and "desactive" or not ns.Known(s.id) and "pas appris"
 			or (s.once and "1x par combat s'il manque" or "") .. (s.when and ((s.once and ", " or "") .. WHEN_LABEL[s.when]) or "")
+		if turns > 1 and Usable(s, aoe or false) and not s.once and not OffGcd(s.id) and not Late(s) then
+			state = state .. (state ~= "" and ", " or "") .. ("1 appui sur %d"):format(turns)
+		end
+		if VIA_BAR[s.id] and not s.once and not s.off then
+			local slot = BarSlot(s.id)
+			state = state .. (state ~= "" and ", " or "")
+				.. (not slot and "a poser sur une barre d'action"
+					or Late(s) and ("au relachement de la touche, par la barre d'action, emplacement " .. slot)
+					or ("par la barre d'action, emplacement " .. slot))
+		end
+		if s.minHP and not s.off then
+			state = state .. (state ~= "" and ", " or "") .. ("si la cible a %d PV ou plus au debut du combat"):format(s.minHP)
+		end
 		tt:AddLine(("%d. %s%s"):format(i, ns.SpellNameIcon(s.id) or ("#" .. s.id), state ~= "" and (" (" .. state .. ")") or ""),
 			grey, grey, grey)
 	end
@@ -371,6 +490,18 @@ end
 function ns.SetupRotation(b, m)
 	button, multi = b, m
 	b:SetScript("PreClick", function() press = GetTime() end)
+	-- Two macros per press (SecureActionButton_OnClick): with pressAndHoldAction, the key going
+	-- down runs "type" / "macrotext", and the release runs "*typerelease1" / RELEASE (set by
+	-- Update). Same for a mouse click on this addon button. SNIPPET renames the key-down left
+	-- button "s<n>" / "a<n>", which reads "*macrotext-s<n>" / "*macrotext-a<n>"; without it, the
+	-- left button is renamed "main", which has no attribute of its own and reads "macrotext".
+	b:RegisterForClicks("AnyDown", "AnyUp")
+	b:SetAttribute("pressAndHoldAction", true)
+	b:SetAttribute("*downbutton1", "main")
+	if SecureHandlerWrapScript then
+		local header = CreateFrame("Frame", nil, UIParent, "SecureHandlerBaseTemplate")
+		SecureHandlerWrapScript(b, "OnClick", header, SNIPPET)
+	end
 	-- Right-click: a custom action type runs b.rotationpanel (SecureTemplates PerformAction)
 	b:SetAttribute("type2", "rotationpanel")
 	b.rotationpanel = function() ns.ToggleRotation() end
@@ -380,9 +511,11 @@ function ns.SetupRotation(b, m)
 		tt:AddLine("Clic droit : choisir les sorts (/duo rotation)", 0.5, 0.8, 1)
 	end
 	b.glow = Glow(b)
-	-- Multi: Blizzard's "attribute" action writes the Rotation macro, in combat too
+	-- Multi: Blizzard's "attribute" action sets the Rotation's mode, in combat too (SNIPPET reads it)
 	m:SetAttribute("attribute-frame", b)
-	m:SetAttribute("attribute-name", "macrotext")
+	m:SetAttribute("attribute-name", "rot-mode")
+	m:SetAttribute("attribute-value", "aoe")     -- left click / key: multi target
+	m:SetAttribute("attribute-value2", "single") -- right click: back to single target
 	m.extra = function(tt)
 		tt:AddLine(not MultiActive() and "Sorts en multi-cibles :" or InCombatLockdown() and "Actif jusqu'a la fin du combat"
 			or "Actif pour le prochain combat, jusqu'a sa fin", 1, 0.45, 0.1)
@@ -430,7 +563,7 @@ end
 -- Panel: the list in priority order, add / remove / move / mode, macro preview
 --------------------------------------------------------------------------------
 
-local WIDTH, ROW_H = 520, 26
+local WIDTH, ROW_H = 570, 26
 local TOP = -92 -- y of the first row, set below the help text
 local rows = {}
 
@@ -482,17 +615,22 @@ local function AddFromCursor()
 	end
 end
 
-local MODE_TIP = "|cffffd040Chaque appui|r : tente le sort a chaque appui ; le jeu le saute s'il n'est pas "
-	.. "utilisable (recharge, rage / mana / energie, posture ; guerrier : Fulgurance apres une esquive, "
-	.. "Execution sous 20 %). Un sort toujours utilisable (Chatiment, Eclair de givre...) bloque ceux du "
-	.. "dessous : mets-le en dernier.\n"
-	.. "|cffffd0401x par combat|r : pour tes buffs (Cri de guerre, Armure de givre...).Lance avant les attaques s'il manque, ou "
+local MODE_TIP = "|cffffd040Chaque appui|r : un appui ne peut tenter qu'UN sort soumis au temps de recharge "
+	.. "global ; ces sorts (Fulgurance, Execution, Slam...) sont donc tentes chacun son tour, un appui sur N, "
+	.. "dans l'ordre de la liste. Le jeu saute ceux qui ne sont pas utilisables (Fulgurance sans esquive, "
+	.. "Execution au-dessus de 20 %) : l'appui suivant tente le suivant. Les sorts hors temps de recharge "
+	.. "global (Frappe heroique, Enchainement) sont tentes a chaque appui.\n"
+	.. "|cffffd0401x par combat|r : pour tes buffs (Cri de guerre, Armure de givre...). Lance au relachement de la touche, juste apres les attaques, s'il manque, ou "
 	.. "finit dans moins de 30 s, quand le combat commence ; une seule fois, car la macro ne peut pas changer "
 	.. "pendant un combat. Le buff doit porter le nom du sort. S'il expire en combat : alerte."
 local WHEN_TIP = "|cffffd040Toujours|r : en mono-cible et en multi-cibles.\n"
 	.. "|cffffd040Multi seulement|r : seulement en mode multi-cibles, apres le bouton Multi (touche ou voix 'multi'), "
 	.. "jusqu'a la fin du combat. Ex. : Coup de tonnerre, Explosion des arcanes.\n"
 	.. "|cffffd040Mono seulement|r : saute en mode multi-cibles."
+local HP_TIP = "Le sort n'est lance que si la cible a au moins ce nombre de points de vie quand le combat "
+	.. "commence (vide : toujours). Decide une fois par combat, car la macro ne peut pas changer pendant un "
+	.. "combat ; hors combat, d'apres ta cible du moment. Points de vie illisibles (donjon) : lance. "
+	.. "Ex. : 850 pour Pourfendre, inutile sur un monstre qui meurt en quelques secondes. Entree pour valider."
 local WHEN_TEXT = { aoe = "Multi seulement", single = "Mono seulement" }
 local WHEN_NEXT = { aoe = "single", single = false }
 
@@ -530,6 +668,25 @@ local function CreateRow(i)
 		function() ns.RotationMove(i, 1) end)
 	row.remove = IconButton(row, 471, "Interface\\Buttons\\UI-GroupLoot-Pass", "Retirer", nil,
 		function() ns.RotationRemove(i) end)
+	-- Minimum health of the target as the fight starts (empty: always), saved when the box loses focus
+	row.hp = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+	row.hp:SetSize(40, 20)
+	row.hp:SetPoint("LEFT", 500, 0)
+	row.hp:SetAutoFocus(false)
+	row.hp:SetNumeric(true)
+	row.hp:SetMaxLetters(6)
+	row.hp:SetScript("OnEnterPressed", row.hp.ClearFocus)
+	row.hp:SetScript("OnEscapePressed", function(self)
+		local s = Steps()[i]
+		self:SetText(s and s.minHP and tostring(s.minHP) or "")
+		self:ClearFocus()
+	end)
+	row.hp:SetScript("OnEditFocusLost", function(self)
+		local n = tonumber(self:GetText())
+		local s = Steps()[i]
+		if s and s.minHP ~= (n and n > 0 and n or nil) then ns.RotationSet(i, "minHP", n and n > 0 and n or nil) end
+	end)
+	Tip(row.hp, "PV min de la cible", HP_TIP)
 	rows[i] = row
 end
 
@@ -573,13 +730,17 @@ local function CreatePanel()
 	help:SetPoint("TOPLEFT", 16, -38)
 	help:SetWidth(WIDTH - 32)
 	help:SetJustifyH("LEFT")
-	help:SetText("A chaque appui, le jeu lance le premier sort utilisable, de haut en bas. "
+	help:SetText("Un appui ne tente qu'un sort soumis au temps de recharge global : ces sorts passent chacun son "
+		.. "tour, un appui sur N ; les sorts hors temps de recharge global (Frappe heroique) a chaque appui. "
 		.. "Pour ajouter un sort : glisse-le depuis le grimoire sur ce panneau, ou tape son nom.\n"
 		.. "Bouton Multi (touche ou voix 'multi') : mode multi-cibles jusqu'a la fin du combat (hors combat : "
-		.. "pour le prochain) ; clic droit sur Multi : retour mono-cible. Place les sorts multi au-dessus de "
-		.. "tes attaques mono-cible (guerrier : Frappe heroique), sinon elles passent avant. "
+		.. "pour le prochain) ; clic droit sur Multi : retour mono-cible. "
 		.. "Une liste par classe : celle de tes autres classes ne change pas.")
-	TOP = -38 - math.ceil(help:GetStringHeight()) - 10
+	TOP = -38 - math.ceil(help:GetStringHeight()) - 10 - 14 -- room for the column title
+
+	local hpTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	hpTitle:SetPoint("BOTTOMLEFT", panel, "TOPLEFT", 15 + 500 - 4, TOP + 2)
+	hpTitle:SetText("PV min")
 
 	for i = 1, MAX_STEPS do CreateRow(i) end
 
@@ -631,11 +792,15 @@ RefreshPanel = function()
 			row.num:SetText(i .. ".")
 			row.icon:SetTexture(icon or QUESTION)
 			row.icon:SetDesaturated(s.off or not known)
-			row.name:SetText((name or ("#" .. s.id)) .. (known and "" or " |cff888888(pas appris)|r"))
+			-- A VIA_BAR spell is cast through its action-bar slot: none, no cast
+			local noSlot = known and VIA_BAR[s.id] and not s.once and not BarSlot(s.id)
+			row.name:SetText((name or ("#" .. s.id)) .. (not known and " |cff888888(pas appris)|r"
+				or noSlot and " |cffff8040(a poser sur une barre)|r" or ""))
 			row.name:SetTextColor(grey, grey, grey)
 			row.mode:SetText(s.once and "1x par combat" or "Chaque appui")
 			row.when:SetText(WHEN_TEXT[s.when] or "Toujours")
 			row.on:SetChecked(not s.off)
+			if not row.hp:HasFocus() then row.hp:SetText(s.minHP and tostring(s.minHP) or "") end
 			row.up:SetEnabled(i > 1)
 			row.down:SetEnabled(i < #steps)
 		end
@@ -647,11 +812,24 @@ RefreshPanel = function()
 	panel.edit:ClearAllPoints(); panel.edit:SetPoint("TOPLEFT", 181, y - 1)
 	panel.add:ClearAllPoints(); panel.add:SetPoint("TOPLEFT", 340, y)
 
-	local hidden = {}
-	local single, aoe = Build(false, false, hidden), Build(false, true, hidden)
-	-- The limit applies to the macro of a fight with every buff missing, the longest one
-	local fightHidden = {}
-	local longest = math.max(#Build(true, false, fightHidden, true), #Build(true, true, fightHidden, true))
+	local singles, release = Macro(false, false)
+	local aoes = Macro(false, true)
+	-- The limit applies to each macro of a fight with every buff missing, the longest ones
+	local fightSingles, fightRelease = Macro(true, false, true)
+	local longest = #fightRelease
+	for _, list in ipairs({ fightSingles, (Macro(true, true, true)) }) do
+		for _, text in ipairs(list) do longest = math.max(longest, #text) end
+	end
+	-- Key-down macros taking turns, one under the other
+	local function Show(list)
+		return table.concat(list, "\n|cff999999- appui suivant -|r\n")
+	end
+	local function Title(label, list)
+		local most = 0
+		for _, text in ipairs(list) do most = math.max(most, #text) end
+		return ("%s (%s%s)"):format(label, #list > 1 and (#list .. " en alternance, ") or "", Count(("x"):rep(most)))
+	end
+	local single, aoe = Show(singles), Show(aoes)
 	y = y - 28
 	panel.reset:ClearAllPoints(); panel.reset:SetPoint("TOPLEFT", 15, y)
 	panel.status:ClearAllPoints(); panel.status:SetPoint("TOPLEFT", 135, y - 5)
@@ -660,17 +838,15 @@ RefreshPanel = function()
 			ATTACK[Class()] == "/startattack" and "attaque en auto" or ATTACK[Class()] and "envoie le familier" or "prend la cible")
 		or longest > MAX_LEN and ("|cffff8040Macro de combat : %d car., le jeu n'en lit que %d : "
 			.. "les derniers sorts sautent. Retire un sort.|r"):format(longest, MAX_LEN)
-		or #fightHidden > 0 and ("|cff999999Sorts 1x par combat lances par un bouton cache (/click), "
-			.. "la macro de combat depassant %d car.|r"):format(MAX_LEN)
 		or "")
 
 	y = y - 32
 	panel.macroTitle:ClearAllPoints(); panel.macroTitle:SetPoint("TOPLEFT", 16, y)
-	panel.macroTitle:SetText(("Macro mono-cible, hors combat (%s)"):format(Count(single)))
+	panel.macroTitle:SetText(Title("Mono-cible, hors combat", singles))
 	panel.macro:ClearAllPoints(); panel.macro:SetPoint("TOPLEFT", 20, y - 16)
-	panel.macro:SetText(single)
+	panel.macro:SetText(single .. (release ~= "" and ("\n|cff999999Au relachement de la touche :|r\n" .. release) or ""))
 	panel.aoeTitle:ClearAllPoints(); panel.aoeTitle:SetPoint("TOPLEFT", WIDTH / 2 + 6, y)
-	panel.aoeTitle:SetText(("Macro multi-cibles (%s)"):format(Count(aoe)))
+	panel.aoeTitle:SetText(Title("Multi-cibles", aoes))
 	panel.aoeMacro:ClearAllPoints(); panel.aoeMacro:SetPoint("TOPLEFT", WIDTH / 2 + 10, y - 16)
 	panel.aoeMacro:SetText(aoe ~= single and aoe or "|cff999999Identique : aucun sort marque Multi ou Mono seulement.|r")
 	local height = math.max(panel.macro:GetStringHeight(), panel.aoeMacro:GetStringHeight())

@@ -174,30 +174,59 @@ Always shown, semi-transparent, opaque on mouse-over. Shift+drag to move it, `/d
 Right-click the **Rotation** button, `/duo rotation`, or **Sorts du bouton Rotation** in the options panel.
 The list is saved per character, for its class (10 spells at most):
 - **Add** a spell by dragging it from the spellbook onto the panel, or by typing its name and pressing Enter.
-- **Order**: arrows up / down; the game tries the spells from top to bottom on each press.
+- **Order**: arrows up / down; the game reads the list from top to bottom on each press.
+- **One spell on the global cooldown per press** (measured in game on 2026-11-07): a macro tries only the first
+  spell of its list that is on the global cooldown, even when that spell is unusable and skipped without a word
+  (Overpower without a dodge, Execute above 20% health); the spells on the global cooldown below it are not tried
+  at all. Spells off the global cooldown (Heroic Strike, Cleave, Bloodrage) are always tried. No code can choose
+  by the target's health at the press either: the only code that runs then is a Blizzard secure snippet, which
+  sees neither health nor whether a spell is usable.
+- **Attacks in turn**: so the key going down has one macro per attack on the global cooldown (that attack, then the
+  spells off it, Heroic Strike), and a secure snippet sends each press to the next one: with Overpower, Execute and
+  Slam, each is tried one press in three, in list order; the game itself skips Overpower without a dodge and
+  Execute above 20% health. As the key is pressed several times a second, each one is tried about once a second.
+  The release, a macro of its own, casts the "once per fight" buffs, then Victory Rush. The tooltip of the Rotation
+  button and the panel show "1 appui sur N"; the panel shows every key-down macro. In multi-target mode the Multi
+  button switches the set of macros (Thunder Clap then takes a turn too).
 - **Mode** of each spell:
-  - **Chaque appui** (each press): tried on every press, skipped by the game when it is not usable. This fits the
-    attacks the game gates by itself: Overpower after a dodge, Execute under 20%, a cooldown, not enough rage.
-    A spell that is always usable (Rend, Sunder Armor, Smite, Frostbolt) would be cast on every press and block the
-    spells below it: put it last.
-  - **1x par combat** (once per fight), for your own buffs (Battle Shout): cast before the attacks when the buff is
-    missing, or ends within 30 s, as the fight starts. Macros cannot check buffs and cannot change during a fight,
+  - **Chaque appui** (each press): an attack off the global cooldown is tried on every press, one on it in turn
+    (see above); the game gates some by itself: Overpower after a dodge, Execute under 20%, a cooldown, rage.
+  - **1x par combat** (once per fight), for your own buffs (Battle Shout): cast when the key is released, just after
+    the attacks, when the buff is missing, or ends within 30 s, as the fight starts. Macros cannot check buffs and cannot change during a fight,
     so this is decided out of combat and cast once (with 10 rage for Battle Shout); the icon shows the buff until then.
     The buff must have the spell's name. If it ends during the fight, an alert names it (with the Battle Shout key),
     only when the client can read auras in combat.
 - **Cibles** (targets) of each spell: **Toujours** (always), **Multi seulement** (only after the Multi button, e.g.
   Thunder Clap) or **Mono seulement** (skipped in multi-target mode).
 - **Actif** (enabled): unchecked keeps the spell in the list without casting it. Spells not learned yet are skipped.
-- **Par defaut** restores Battle Shout (once per fight), Overpower, Thunder Clap (multi only), Heroic Strike for the
+- **PV min** (minimum health): a number in this column casts the spell only if the target has at least that much
+  health when the fight starts; empty = always. Typed value saved with Enter or by clicking elsewhere. The macro
+  cannot change during a fight, so this is decided once, at the start (out of combat: from your current target):
+  your live enemy target, otherwise the partner's. Unreadable health (dungeon secrets, or a client that gives only
+  percentages) casts the spell. Example: 850 for Rend, measured on 2026-11-06/07: on mobs under 1000 health, Rend
+  did 2.2 of its 5 ticks on average (two in three Rends did 2 or fewer), against 3.2 on 1000-2000 health elites.
+- **Victory Rush** (WoW Forever): the client always calls it unusable, even during its "Victorious" buff, and a macro
+  skips an unusable spell without a word, while an action-bar key casts it. So the Rotation casts it through its
+  action-bar slot (a hidden button it `/click`s): keep Victory Rush on any action bar. The tooltip of the Rotation
+  button shows the slot used; the panel shows "a poser sur une barre" when it is on none. Whatever its place in the
+  list, it is tried at the end of the key release, after the "once per fight" buffs: a macro tries only one spell
+  on the global cooldown per press, and this click always takes that turn, even when Victory Rush cannot be cast,
+  which left Overpower no turn when it was among the attacks. So it waits for a press whose key down did not just
+  start a spell (Overpower, Slam's cast) and whose buffs are already cast.
+- **Slam** (WoW Forever's version, with a cast time): in combat the client calls it unusable too, so the Rotation
+  casts it through its action-bar slot as well, first in its own key-down macro. Keep it on an action bar. It needs
+  the warrior to stand still: a pedal press (Click-to-Move) during the cast interrupts it.
+- **Par defaut** restores Battle Shout (once per fight), Thunder Clap (multi only), Overpower, Heroic Strike for the
   warrior, and empties the list for the other classes.
-- The bottom of the panel shows both macros, single and multi target. Changes made in combat apply at the end of the
-  fight.
-- **255 characters**: the game runs only the first 255 characters of a button's macro and silently drops the rest,
-  i.e. the last attacks of the list (measured on 2026-11-06: with four "once per fight" spells, the fight macro
-  reached 287 characters and Heroic Strike was never cast). In a fight each "once per fight" spell takes a whole
-  `/castsequence` line, so when the macro would be too long these lines move to hidden buttons that the Rotation
-  macro runs first with `/click` (same order); the panel says so in grey. If the attacks alone are still too long,
-  the panel warns in orange: remove a spell.
+- The bottom of the panel shows both macros, single and multi target, and under the single one what the key release
+  casts. Changes made in combat apply at the end of the fight.
+- **Two macros per press, 255 characters each**: the game runs only the first 255 characters of a button's macro
+  and silently drops the rest (measured on 2026-11-06: with four "once per fight" spells in one macro, it reached 287
+  characters and Overpower and Heroic Strike were never cast). So the key going down runs the attacks (target, auto
+  attack, "each press" spells) and its release runs the "once per fight" buffs, each a `/castsequence` line in a
+  fight. A buff marked **Multi seulement** or **Mono seulement** stays at the top of the key-down macro, the one the
+  Multi button swaps. If one of the two macros of a fight is still over 255 characters, the panel warns in orange:
+  remove a spell. (A macro run by `/click` from another macro did nothing on this client.)
 
 ### Partner cast bar (leader screen)
 Yellow while casting, blue for an instant spell, green on success, red when interrupted / failed.

@@ -301,7 +301,11 @@ local function HookButtons()
 			and obj.HookScript and not hookedButtons[obj] then
 			hookedButtons[obj] = true
 			local key = name:sub(10)
-			obj:HookScript("OnClick", function(_, mouse) Add("K", "B", key, mouse) end)
+			obj:HookScript("OnClick", function(self, mouse, down)
+				-- Rotation acts on the key going down and on its release: one press, one entry
+				if down == false and self:GetAttribute("pressAndHoldAction") then return end
+				Add("K", "B", key, mouse)
+			end)
 		end
 	end
 end
