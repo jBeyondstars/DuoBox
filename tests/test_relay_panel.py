@@ -2,8 +2,11 @@
 
 RelayPanel.lua: the panel of the warrior's spells and the code it draws in the top-left corner for
 DuoRelay. DuoRelay.ps1 -SelfTest checks the reading side with the same test vector (icon 10).
+CooldownTest runs two clients (priest and warrior, clocks 5000 s apart) joined by a message bus with a
+delay, for the estimated cooldowns.
 """
 from pathlib import Path
+import re
 import unittest
 
 from lupa.lua51 import LuaRuntime
@@ -33,6 +36,36 @@ function ns.Print(msg) table.insert(printed, msg) end
 function ns.Set(key, value) db[key] = value; if ns.RefreshRelayPanel then ns.RefreshRelayPanel() end end
 function ns.SpellNameIcon(id) local s = SPELLS[id]; if s then return s[1], s[2] end end
 function GetPhysicalScreenSize() return physical[1], physical[2] end
+sent, partner = {}, "party1"
+function ns.SendComm(msg, prefix) table.insert(sent, {msg = msg, prefix = prefix}); return 0 end
+function ns.FromPartner(body, sender) if sender == "Partner" then return body end end
+function ns.PartnerUnit() return partner end
+C_ChatInfo = {RegisterAddonMessagePrefix = function() end}
+SECRET = {}
+function issecretvalue(v) return v == SECRET end
+restricted = false    -- combat addon restriction: cooldowns hidden
+cooldowns = {}        -- spell -> {startTime, duration} as the game shows it
+C_Spell = {GetSpellCooldown = function(spell)
+    if restricted then return {startTime = SECRET, duration = SECRET} end
+    return cooldowns[spell] or {startTime = 0, duration = 0}
+end}
+BASE = {[7384] = {5000, 1500}, [6343] = {4000, 1500}, [1240193] = {0, 1500}, [78] = {0, 0}, [845] = {0, 0},
+        [402927] = {0, 1500}, [5308] = {0, 1500}, [1715] = {0, 1500}}
+function GetSpellBaseCooldown(id) local b = BASE[id]; if b then return b[1], b[2] end end
+function fromPartner(msg) for _, f in ipairs(frames) do
+    if f.events.CHAT_MSG_ADDON then f.scripts.OnEvent(f, "CHAT_MSG_ADDON", "DUOBOXR", msg, "PARTY", "Partner") end
+end end
+function cast(event, spellID, guid, unit)
+    for _, f in ipairs(frames) do
+        if f.events[event] then f.scripts.OnEvent(f, event, unit or "player", guid or ("Cast-" .. tostring(spellID)), spellID) end
+    end
+end
+-- Cooldown shown on icon i: "start/duration" or "none"
+function cdOf(i)
+    local c = icons()[i].cd
+    if not c.cdStart or c.cdDur == 0 then return "none" end
+    return ("%.3f/%.3f"):format(c.cdStart, c.cdDur)
+end
 
 local Region = {}
 Region.__index = Region
@@ -66,6 +99,10 @@ function Region:SetTexture(t) self.texture = t end
 function Region:SetText(t) self.text = t end
 function Region:SetScript(name, fn) self.scripts[name] = fn end
 function Region:RegisterEvent(e) self.events[e] = true end
+function Region:RegisterUnitEvent(e, unit) self.events[e] = unit end
+function Region:SetCooldown(start, dur) self.cdStart, self.cdDur = start, dur end
+function Region:Clear() self.cdStart, self.cdDur = nil, nil end
+function Region:SetHideCountdownNumbers(v) self.hideNumbers = v end
 function Region:CreateTexture() local t = New(self); table.insert(textures, t); return t end
 function Region:CreateFontString() return New(self) end
 for _, m in ipairs({"SetFrameStrata", "SetFrameLevel", "SetMovable", "SetClampedToScreen", "EnableMouse",
@@ -162,10 +199,28 @@ class RelayPanelTest(unittest.TestCase):
             ns.Set("relayPanelSpells", ""); assert(not panel().shown) -- no spell: no panel
         ''')
 
+    def test_icons_per_row(self):
+        self.load('db.relayPanelSpells = "402927,1240193,5308,6343,7384,78,845,1715"')
+        self.run_lua('''
+            -- no setting (old saved settings): one row
+            assert(panel().w == 8 * 36 + 7 * 4 and panel().h == 14 + 36, panel().w .. "x" .. panel().h)
+            ns.Set("relayPanelPerRow", 4)                       -- 2 rows of 4
+            local b = icons()
+            assert(panel().w == 4 * 36 + 3 * 4 and panel().h == 14 + 2 * 36 + 4, panel().w .. "x" .. panel().h)
+            assert(b[4].point[2] == 3 * 40 and b[4].point[3] == -14, b[4].point[2] .. "," .. b[4].point[3])
+            assert(b[5].point[2] == 0 and b[5].point[3] == -14 - 40, b[5].point[2] .. "," .. b[5].point[3])
+            assert(b[8].point[2] == 3 * 40 and b[8].point[3] == -54)
+            ns.Set("relayPanelPerRow", 3)                       -- 3 + 3 + 2
+            assert(panel().w == 3 * 36 + 2 * 4 and panel().h == 14 + 3 * 36 + 2 * 4, panel().w .. "x" .. panel().h)
+            assert(b[7].point[2] == 0 and b[7].point[3] == -14 - 80)
+            ns.Set("relayPanelPerRow", 10); assert(panel().w == 8 * 36 + 7 * 4) -- fewer icons than the row: no gap
+            ns.Set("relayPanelPerRow", 0); assert(panel().w == 36 and panel().h == 14 + 8 * 36 + 7 * 4) -- at least 1
+        ''')
+
     def test_no_secure_frame_a_click_does_nothing_in_this_game(self):
         self.load()
         self.run_lua('''
-            assert(#templates == 0, templates[1])
+            for _, t in ipairs(templates) do assert(t == "CooldownFrameTemplate", t) end -- the swipes only
             for _, b in ipairs(icons()) do assert(b.scripts.OnClick == nil and b.scripts.PreClick == nil) end
         ''')
 
@@ -264,6 +319,180 @@ class RelayPanelTest(unittest.TestCase):
             ns.RelayPanelCommand("on"); assert(db.relayPanel == true)
             ns.RelayPanelCommand("nimporte"); assert(last():find("/duo panneau", 1, true))
         ''')
+
+
+
+class Client:
+    """One game client: its own Lua state and clock (clock_offset s ahead of the world time)."""
+
+    def __init__(self, clock_offset, setup=""):
+        self.lua = LuaRuntime(unpack_returned_tuples=True)
+        self.lua.execute(MOCK)
+        self.lua.execute(setup)
+        self.lua.execute(f"clock = {100 + clock_offset}")
+        self.lua.execute((ROOT / "RelayPanel.lua").read_text(encoding="utf-8"), "DuoBox", self.lua.globals().ns)
+        self.lua.execute("login()")
+
+    def run(self, code):
+        return self.lua.execute(code)
+
+    def last(self):
+        return self.lua.eval("last()")
+
+    def outbox(self):
+        msgs = [m.msg for m in self.lua.globals().sent.values() if m.prefix == "DUOBOXR"]
+        self.lua.execute("sent = {}")
+        return msgs
+
+
+class CooldownTest(unittest.TestCase):
+    LATENCY = 0.1  # s each way through the game server
+
+    def setUp(self):
+        # priest: panel shown; warrior: option off (the reporting side needs none), clock 5000 s ahead
+        self.priest = Client(0)
+        self.warrior = Client(5000, "db.relayPanel = false")
+        self.t = 100.0
+        self.queue = []  # (deliver at, client, message)
+
+    def advance(self, seconds, step=0.01):
+        end = self.t + seconds
+        while self.t < end - 1e-9:
+            self.t += step
+            for c in (self.priest, self.warrior):
+                c.run(f"wait({step})")
+            for src, dst in ((self.priest, self.warrior), (self.warrior, self.priest)):
+                for msg in src.outbox():
+                    self.queue.append((self.t + self.LATENCY, dst, msg))
+            due = [q for q in self.queue if q[0] <= self.t + 1e-9]
+            self.queue = [q for q in self.queue if q[0] > self.t + 1e-9]
+            for _, dst, msg in due:
+                dst.run(f"fromPartner({msg!r})")
+
+    def cd(self, i):
+        """Start and duration of icon i's cooldown on the priest's screen, or None."""
+        text = self.priest.lua.eval(f"cdOf({i})")
+        return None if text == "none" else tuple(map(float, text.split("/")))
+
+    def warrior_cast(self, spell, event="UNIT_SPELLCAST_SUCCEEDED", guid=None):
+        g = f', "{guid}"' if guid else ""
+        self.warrior.run(f'cast("{event}", {spell}{g})')
+
+    def test_clock_sync_takes_the_shortest_round_trip(self):
+        self.advance(4)
+        self.priest.run("ns.RelayPanelCommand('cd')")
+        line = self.priest.lua.eval("table.concat(printed, ' | ')")
+        rtt, off = map(int, re.search(r"aller-retour (\d+) ms, decalage (-?\d+) ms", line).groups())
+        self.assertTrue(200 <= rtt <= 220, line)  # 2 x 100 ms, plus the bus' 10 ms steps
+        self.assertAlmostEqual(off, -5000000, delta=10)
+
+    def test_cast_in_combat_starts_its_cooldown_and_the_global_one_on_the_priest_clock(self):
+        self.advance(4)  # clocks synced
+        self.warrior.run("restricted = true")  # in combat: the game hides cooldowns
+        cast_at = self.t
+        self.warrior_cast(7384)  # Overpower
+        self.advance(0.5)
+        start, dur = self.cd(5)  # icon 5 = Overpower: its own 5 s from the cast, latency removed
+        self.assertAlmostEqual(start, cast_at, delta=0.02)
+        self.assertEqual(dur, 5)
+        start, dur = self.cd(2)  # icon 2 = Slam, on the global cooldown: 1.5 s
+        self.assertAlmostEqual(start, cast_at, delta=0.02)
+        self.assertEqual(dur, 1.5)
+        self.priest.run('ns.Set("relayPanelSpells", "402927,1240193,5308,6343,7384,78")')
+        self.assertIsNone(self.cd(6))  # Heroic Strike, off the global cooldown
+        self.assertEqual(self.cd(5)[1], 5)  # kept after a list change
+        self.priest.run("ns.RelayPanelCommand('cd')")
+        self.assertRegex(self.priest.last(), r"Overpower il y a \d s \(recharge valeur du jeu\)")
+
+    def test_the_later_end_wins(self):
+        self.advance(4)
+        self.warrior.run("restricted = true")
+        first = self.t
+        self.warrior_cast(7384)  # Overpower: 5 s
+        self.advance(4)
+        second = self.t
+        self.warrior_cast(1715)  # Hamstring: global cooldown only, ends after Overpower's 5 s
+        self.advance(0.3)
+        self.assertGreater(second + 1.5, first + 5)
+        start, dur = self.cd(5)
+        self.assertAlmostEqual(start, second, delta=0.02)
+        self.assertEqual(dur, 1.5)
+
+    def test_exact_out_of_combat_then_measured_in_combat(self):
+        self.advance(4)
+        # out of combat the game shows Thunder Clap's real cooldown (6 s here, not the 4 s base value)
+        self.warrior.run("cooldowns[6343] = {startTime = clock, duration = 6}")
+        at = self.t
+        self.warrior_cast(6343)
+        self.advance(0.3)
+        start, dur = self.cd(4)
+        self.assertAlmostEqual(start, at, delta=0.02)
+        self.assertEqual(dur, 6)
+        self.priest.run("ns.RelayPanelCommand('cd')")
+        self.assertIn("recharge exacte", self.priest.last())
+        self.advance(7)
+        self.warrior.run("restricted = true")
+        self.warrior_cast(6343, guid="Cast-2")
+        self.advance(0.3)
+        self.assertEqual(self.cd(4)[1], 6)  # measured earlier, not the 4 s base value
+        self.priest.run("ns.RelayPanelCommand('cd')")
+        self.assertIn("recharge mesuree hors combat", self.priest.last())
+
+    def test_cast_time_spell_starts_the_global_cooldown_at_its_start(self):
+        self.advance(4)
+        self.warrior.run("restricted = true")
+        start_at = self.t
+        self.warrior_cast(1240193, "UNIT_SPELLCAST_START", "Slam-1")  # Slam, cast time
+        self.advance(1.5)
+        self.warrior_cast(1240193, "UNIT_SPELLCAST_SUCCEEDED", "Slam-1")
+        self.warrior.run("wait(0.01)")
+        self.assertEqual(self.warrior.outbox(), [])  # no cooldown of its own, global one already sent
+        start, dur = self.cd(2)
+        self.assertAlmostEqual(start, start_at, delta=0.02)
+        self.assertEqual(dur, 1.5)
+
+    def test_fallbacks_tooltip_then_table(self):
+        self.warrior.run("GetSpellBaseCooldown = nil; restricted = true")
+        self.warrior.run("C_TooltipInfo = {GetSpellByID = function(id) if id == 7384 then return "
+                         "{lines = {{leftText = 'Overpower'}, {leftText = '5 Rage', rightText = '7 sec cooldown'}}} end end}")
+        self.advance(4)
+        self.warrior_cast(7384)
+        self.advance(0.3)
+        self.assertEqual(self.cd(5)[1], 7)  # tooltip
+        self.warrior_cast(6343)  # Thunder Clap: not in the tooltip mock -> DuoBox's table, 4 s
+        self.advance(0.3)
+        self.assertEqual(self.cd(4)[1], 4)
+        self.priest.run("ns.RelayPanelCommand('cd')")
+        self.assertIn("recharge table DuoBox", self.priest.last())
+
+    def test_reports_only_while_asked(self):
+        self.warrior_cast(7384)  # no ping received yet
+        self.warrior.run("wait(0.01)")
+        self.assertEqual(self.warrior.outbox(), [])
+        self.advance(4)
+        self.priest.run('ns.Set("relayPanel", false)')  # panel hidden: no more pings
+        self.advance(31)
+        self.warrior_cast(7384, guid="Cast-late")
+        self.warrior.run("wait(0.01)")
+        self.assertEqual(self.warrior.outbox(), [])
+
+    def test_without_clock_sync_the_message_counts_as_instant(self):
+        self.priest.run("partner = nil")  # the priest sends no ping...
+        self.warrior.run('fromPartner("RT:1")')  # ...but asked earlier (before a /reload, say)
+        self.warrior.outbox()
+        sent_at = self.t
+        self.warrior_cast(7384)
+        self.advance(0.3)
+        start, dur = self.cd(5)
+        self.assertAlmostEqual(start, sent_at + self.LATENCY, delta=0.03)
+        self.assertEqual(dur, 5)
+
+    def test_another_units_secret_payload_is_ignored(self):
+        self.advance(4)
+        self.priest.run('cast("UNIT_SPELLCAST_SUCCEEDED", SECRET, SECRET, SECRET)')  # if one ever arrives
+        self.priest.run("wait(0.01)")
+        self.assertEqual(self.priest.outbox(), [])
+        self.assertIsNone(self.cd(5))
 
 
 if __name__ == "__main__":

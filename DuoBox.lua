@@ -57,7 +57,8 @@ local defaults = {
 	facingCone  = false,  -- yellow cone at the partner's feet, where it faces (FacingCone.lua)
 	coneHeight  = 100,    -- %: how far under the partner's nameplate the cone starts (its feet)
 	relayPanel  = false,  -- DuoRelay: panel of the warrior's spells, a click = the warrior casts it (RelayPanel.lua)
-	relayPanelSpells = "402927,1240193,5308,6343,7384", -- its icons, in DuoRelay.json "pixel" order: Victory Rush, Slam, Execute, Thunder Clap, Overpower
+	relayPanelSpells = "402927,1240193,5308,6343,7384,78,845,1715,5246", -- its icons, in DuoRelay.json "pixel" order: Victory Rush, Slam, Execute, Thunder Clap, Overpower, Heroic Strike, Cleave, Hamstring, Intimidating Shout
+	relayPanelPerRow = 10, -- icons per row of that panel (Options > Automatisme)
 }
 
 local DB
@@ -2364,7 +2365,7 @@ local function Set(key, value)
 	if (key == "procLight" or key == "procOff") and ns.RefreshProcLight then ns.RefreshProcLight() end
 	if key == "journal" and ns.RefreshJournal then ns.RefreshJournal() end
 	if (key == "facingCone" or key == "coneHeight") and ns.RefreshCone then ns.RefreshCone(key) end
-	if (key == "relayPanel" or key == "relayPanelSpells") and ns.RefreshRelayPanel then ns.RefreshRelayPanel() end
+	if (key == "relayPanel" or key == "relayPanelSpells" or key == "relayPanelPerRow") and ns.RefreshRelayPanel then ns.RefreshRelayPanel() end
 	if key == "rotation" and ns.RotationChanged then ns.RotationChanged() end -- loaded by a profile
 	if (key == "tracking" or key == "partner") and ns.RefreshTracking then
 		ns.RefreshTracking()

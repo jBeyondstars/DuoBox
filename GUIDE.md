@@ -675,12 +675,30 @@ PC 2 press that spell's **action-bar key** in the warrior's WoW: the warrior cas
 the Rotation key handles badly: one macro run tries only one spell on the global cooldown, and Victory Rush and
 Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
 - Priest only: **Automatisme > DuoRelay > Panneau des sorts du guerrier**, or `/duo panneau` (off by default).
-  The warrior's DuoBox does nothing new: PC 2 presses the warrior's own keys.
+  PC 2 presses the warrior's own keys; the warrior's DuoBox only reports its casts for the cooldowns (below),
+  nothing to switch on there.
 - Drag the dark strip above the icons to move the panel. The icons are plain frames: a click on them does nothing
   in the priest's game, in or out of combat. The tooltip shows the spell and the icon's number.
-- Default icons: **1** Victory Rush, **2** Slam, **3** Execute, **4** Thunder Clap, **5** Overpower.
+- Default icons: **1** Victory Rush, **2** Slam, **3** Execute, **4** Thunder Clap, **5** Overpower,
+  **6** Heroic Strike, **7** Cleave, **8** Hamstring, **9** Intimidating Shout. After a DuoBox update that adds
+  icons, `/duo panneau defaut` on the priest takes the new list (the saved list is kept otherwise).
   `/duo panneau sorts Victory Rush, Slam, 5308` replaces them (English names of the usual warrior spells, or spell
   IDs; 10 at most), `/duo panneau sorts` lists them with their numbers, `/duo panneau defaut` restores them.
+- **Automatisme > DuoRelay > Icones par rangee**: icons per row (1 to 10, 10 by default = one row);
+  4 with 8 spells gives 2 rows of 4.
+- **Cooldowns on the icons (estimated)**: a swipe and a countdown as on the action bars (the numbers follow the
+  game's own "show cooldown numbers" option). This client hides cooldowns from addons in combat (checked on the
+  warrior 2026-11-07), and the priest's client sees the warrior's casts without their spell. So the warrior's
+  DuoBox reports each of its own casts that starts a cooldown, while the panel is shown (the priest's DuoBox asks
+  every 10 s), with its clock time; the priest's DuoBox converts it with the clock offset measured by these
+  requests (the one with the shortest round trip), so the message's 0.1-0.3 s trip does not delay the swipe.
+  Each icon shows its spell's own cooldown, or the global cooldown (1.5 s, after any warrior spell on it) when that
+  one ends later. Heroic Strike and Cleave are off the global cooldown. The cooldown's length: read from the game
+  when it shows it (out of combat), else the length read out of combat earlier in the session, the game's base
+  value, the spell's tooltip, and last DuoBox's table (Overpower 5 s, Thunder Clap 4 s, Intimidating Shout 3 min).
+  Not seen: resets and reductions in a fight (talents, procs), casts while the panel is hidden; addon messages
+  may be blocked in some instances. Needs the same DuoBox version on both characters (`/reload` on both).
+  `/duo panneau cd`: clock offset and round trip, last cast received and where its length came from.
 - How DuoRelay knows the icon (a game addon cannot talk to another program): while the mouse is over icon N, DuoBox
   draws 4 small squares, 8 screen pixels each, in the top-left corner of the WoW window, colours that encode N.
   On a left press in WoW, DuoRelay reads those pixels and relays the trigger whose `"pixel"` is N. Each colour is
@@ -689,8 +707,8 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
 - **WoW must run in Windowed or Windowed (Fullscreen) mode**: in exclusive fullscreen other programs cannot read
   the picture, and the clicks on the icons do nothing.
 - The icon number is the `"pixel"` of a trigger in `DuoRelay.json`, which holds the key PC 2 presses: keep both
-  lists in the same order. Default triggers, read from the warrior's key bindings and combat journal (Execute: told
-  by the user) on 2026-11-07:
+  lists in the same order. Default triggers, read from the warrior's key bindings and combat journal (Execute and
+  Intimidating Shout: their bar slot told by the user) on 2026-11-07:
 
 | Icon | Spell | Key on PC 2 | Action bar slot |
 |---|---|---|---|
@@ -699,8 +717,13 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
 | 3 | Execute | `5` | 77 (Battle Stance page of the main bar, button 5) |
 | 4 | Thunder Clap | `C` | 79 (Battle Stance page of the main bar, button 7) |
 | 5 | Overpower | `E` | 62 (bottom left bar, button 2) |
+| 6 | Heroic Strike | `1` | 73 (Battle Stance page of the main bar, button 1) |
+| 7 | Cleave | `Shift+C` | 80 (Battle Stance page of the main bar, button 8) |
+| 8 | Hamstring | `4` | 76 (Battle Stance page of the main bar, button 4) |
+| 9 | Intimidating Shout | `W` | 68 (Action Bar 2 = bottom left bar, button 8) |
 
-- Main bar keys (`F4`, `5`, `C`) press the Battle Stance page: in another stance they press that stance's button.
+- Main bar keys (`F4`, `5`, `C`, `1`, `Shift+C`, `4`) press the Battle Stance page: in another stance they press
+  that stance's button.
   If you move a spell on the warrior's bars, change its `keys`.
 - A panel trigger: `{ "name": "slam", "label": "...", "pixel": 2, "keys": "F", "delayMs": 0 }`. No `button`
   and no `modifier`; `pixel` from 1 to 36; `delayMs` 0 = pressed at once. `pixelCell` (8, optional) is the

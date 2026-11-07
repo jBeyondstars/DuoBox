@@ -60,6 +60,34 @@
       "pixel": 5,
       "keys": "E",
       "delayMs": 0
+    },
+    {
+      "name": "heroicstrike",
+      "label": "panel icon 6: Heroic Strike, action bar key 1 (slot 73, Battle Stance page)",
+      "pixel": 6,
+      "keys": "1",
+      "delayMs": 0
+    },
+    {
+      "name": "cleave",
+      "label": "panel icon 7: Cleave, action bar key Shift+C (slot 80, Battle Stance page)",
+      "pixel": 7,
+      "keys": "SHIFT-C",
+      "delayMs": 0
+    },
+    {
+      "name": "hamstring",
+      "label": "panel icon 8: Hamstring, action bar key 4 (slot 76, Battle Stance page)",
+      "pixel": 8,
+      "keys": "4",
+      "delayMs": 0
+    },
+    {
+      "name": "intimidatingshout",
+      "label": "panel icon 9: Intimidating Shout, action bar key W (Action Bar 2 button 8, slot 68)",
+      "pixel": 9,
+      "keys": "W",
+      "delayMs": 0
     }
   ],
   "delayMs": 150,

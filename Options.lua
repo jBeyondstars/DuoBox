@@ -404,7 +404,11 @@ Toggle(auto, COL2, -42, "relayPanel", "Panneau des sorts du guerrier",
 	"Sur le pretre, desactive par defaut, avec DuoRelay lance sur les deux PC. Un clic sur une icone fait lancer "
 	.. "le sort au guerrier : DuoRelay presse sa touche de barre sur le PC 2 (rien ne se passe dans ce jeu). "
 	.. "Icone N = declencheur \"pixel\": N de DuoRelay.json. Fenetre ou plein ecran fenetre. "
+	.. "Recharges estimees sur les icones (le jeu les cache en combat) : meme version de DuoBox sur le guerrier. "
 	.. "/duo panneau sorts <liste> : changer les icones (GUIDE.md, section 7).")
+Slider(auto, COL2, -66, "relayPanelPerRow", "Icones par rangee (panneau guerrier)", 1, 10, 1, "%d",
+	"Nombre d'icones sur chaque rangee du panneau des sorts du guerrier : 4 avec 8 sorts = 2 rangees de 4. "
+	.. "10 = une seule rangee.")
 
 Header(auto, 0, -104, "Quetes")
 Toggle(auto, 0, -122, "autoShare", "Partager automatiquement les quetes acceptees",

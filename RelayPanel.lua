@@ -17,6 +17,17 @@
 -- only shown here (icon, tooltip): their order is the "pixel" number of the
 -- DuoRelay.json triggers. /duo panneau. Kept out of DuoBox.lua (Lua 5.1's 200
 -- locals).
+-- Cooldowns on the icons, estimated: this client hides cooldowns from addons
+-- in combat (C_Spell.GetSpellCooldown is SecretWhenCooldownsRestricted, seen in
+-- game 2026-11-07), and the partner's cast events carry a hidden spell ID
+-- (SecretWhenUnitSpellCastRestricted). But a client sees its own casts, so
+-- while the panel side asks ("RT" clock pings, every 10 s), the warrior's
+-- DuoBox reports each of its casts that starts a cooldown: "RC" with its own
+-- clock times. The cooldown itself: read when the client shows it (out of
+-- combat), else measured earlier, the game's base value, the tooltip, a table.
+-- The panel side turns the times into its own clock (offset from the ping with
+-- the shortest round trip) and draws the spell's cooldown, or the global
+-- cooldown when it ends later, as an action bar does.
 --------------------------------------------------------------------------------
 
 local _, ns = ...
@@ -43,6 +54,12 @@ local NAMES = {
 local function DB() return ns.GetDB() end
 
 local function Say(msg) ns.Print(msg) end
+
+-- The secret test comes first: comparing a secret value, even to nil, is refused
+local function Val(v)
+	if issecretvalue and issecretvalue(v) then return nil end
+	return v
+end
 
 -- Spell IDs of the panel, in order ("402927,1240193" in the settings)
 local function Spells()
@@ -186,8 +203,29 @@ for i = 1, MAX do
 	b:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
 	b:SetScript("OnEnter", IconEnter)
 	b:SetScript("OnLeave", IconLeave)
+	-- Swipe and countdown, as on the action bars (numbers: the game's countdownForCooldowns option)
+	local ok, cd = pcall(CreateFrame, "Cooldown", nil, b, "CooldownFrameTemplate")
+	if not ok or not cd then cd = CreateFrame("Cooldown", nil, b) end
+	cd:SetAllPoints()
+	if cd.SetHideCountdownNumbers then cd:SetHideCountdownNumbers(false) end
+	b.cd = cd
 	b:Hide()
 	icons[i] = b
+end
+
+local UpdateCooldowns -- draws the icons' cooldowns (below)
+
+-- Icons in rows of DB.relayPanelPerRow, left to right then top to bottom
+local function Layout(n)
+	local perRow = math.floor(tonumber(DB() and DB().relayPanelPerRow) or MAX)
+	perRow = math.max(1, math.min(MAX, perRow))
+	for i, b in ipairs(icons) do
+		local col, row = (i - 1) % perRow, math.floor((i - 1) / perRow)
+		b:ClearAllPoints()
+		b:SetPoint("TOPLEFT", col * (SIZE + GAP), -(HANDLE + 2) - row * (SIZE + GAP))
+	end
+	local cols, rows = math.min(n, perRow), math.ceil(n / perRow)
+	panel:SetSize(cols * SIZE + (cols - 1) * GAP, HANDLE + 2 + rows * SIZE + (rows - 1) * GAP)
 end
 
 local function Refresh()
@@ -200,12 +238,294 @@ local function Refresh()
 		end
 		b:SetShown(ids[i] ~= nil)
 	end
-	local n = math.max(#ids, 1)
-	panel:SetWidth(n * SIZE + (n - 1) * GAP)
+	Layout(math.max(#ids, 1))
 	panel:SetShown(DB() ~= nil and DB().relayPanel == true and #ids > 0)
 	if lit and not lit:IsShown() then Off() end
+	UpdateCooldowns()
 end
 ns.RefreshRelayPanel = Refresh
+
+--------------------------------------------------------------------------------
+-- Cooldowns
+--------------------------------------------------------------------------------
+
+local CD_PREFIX = "DUOBOXR" -- its own addon message budget
+local SYNC_FIRST = 1        -- s between the first clock pings
+local SYNC_EVERY = 10       -- s between two pings afterwards (they also ask for the casts)
+local FIRST_SAMPLES = 3     -- pings sent SYNC_FIRST apart
+local SAMPLES = 8           -- clock samples kept: the shortest round trip gives the offset
+local WANT_FOR = 30         -- s the reporting side keeps reporting after the last ping
+local GCD = 1.5             -- s, the warrior's global cooldown
+local GCD_SPELL = 61304     -- "Global Cooldown": read when the client shows it
+
+-- Own cooldown (s) when the client gives none (Classic values, rank 1 IDs)
+local BASE_CD = {
+	[7384] = 5, [6343] = 4, [5246] = 180, [100] = 15, [355] = 10, [2687] = 60, [694] = 120, [72] = 12,
+	[6572] = 5, [676] = 60, [20230] = 1800, [2565] = 5, [20252] = 30, [1680] = 10, [6552] = 10,
+	[18499] = 30, [12294] = 6, [23881] = 6, [23922] = 6, [1161] = 600, [871] = 1800, [1719] = 1800,
+}
+-- Spells off the global cooldown (next melee swing, Bloodrage)
+local OFF_GCD = { [78] = true, [845] = true, [2687] = true }
+
+local byName = {} -- table -> { spell name -> value }
+local function ByName(tbl, name)
+	local map = byName[tbl]
+	if not map then
+		map = {}
+		for id, v in pairs(tbl) do
+			local n = ns.SpellNameIcon(id)
+			if n then map[n] = v end
+		end
+		byName[tbl] = map
+	end
+	return map[name]
+end
+
+local function Ms(seconds) return math.floor((seconds or GetTime()) * 1000 + 0.5) end
+
+local function Num(v)
+	v = Val(v)
+	return type(v) == "number" and v or nil
+end
+
+-- Start and duration (s) of a cooldown when this client shows it (out of combat), nil when hidden
+local function ReadCooldown(spell)
+	if C_Spell and C_Spell.GetSpellCooldown then
+		local info = C_Spell.GetSpellCooldown(spell)
+		if Val(info) == nil or type(info) ~= "table" then return nil end
+		local s, d = Num(info.startTime), Num(info.duration)
+		if s and d then return s, d end
+	elseif GetSpellCooldown then
+		local s, d = GetSpellCooldown(spell)
+		s, d = Num(s), Num(d)
+		if s and d then return s, d end
+	end
+end
+
+-- "5 sec cooldown" / "3 min cooldown" in the spell's tooltip (English client)
+local function TooltipCooldown(id)
+	local data = C_TooltipInfo and C_TooltipInfo.GetSpellByID and C_TooltipInfo.GetSpellByID(id)
+	if type(Val(data)) ~= "table" or type(data.lines) ~= "table" then return nil end
+	for _, line in ipairs(data.lines) do
+		for _, text in pairs({ Val(line.leftText) or "", Val(line.rightText) or "" }) do
+			local n, unit = tostring(text):match("([%d%.]+) (%a+) cooldown")
+			n = tonumber(n)
+			if n and unit == "sec" then return n end
+			if n and unit == "min" then return n * 60 end
+		end
+	end
+end
+
+-- Global cooldown (s) a spell starts: the game's base value, else the table
+local function SpellGcd(id, name)
+	if GetSpellBaseCooldown then
+		local ok, _, g = pcall(GetSpellBaseCooldown, id)
+		g = ok and Num(g)
+		if g then return g / 1000 end
+	end
+	return ByName(OFF_GCD, name) and 0 or GCD
+end
+
+local measured = {} -- spell name -> own cooldown (s) read on this client, for the fights where it is hidden
+
+-- Own cooldown (s) of one of this client's spells and where it comes from:
+-- m = measured here, b = game base value, t = tooltip, f = table
+local function OwnCooldown(id, name)
+	if measured[name] then return measured[name], "m" end
+	if GetSpellBaseCooldown then
+		local ok, c = pcall(GetSpellBaseCooldown, id)
+		c = ok and Num(c)
+		if c then return c / 1000, "b" end
+	end
+	local t = TooltipCooldown(id)
+	if t then return t, "t" end
+	return ByName(BASE_CD, name) or 0, "f"
+end
+
+--------------------------------------------------------------------------------
+-- Reporting side (the warrior): its own casts, only while the panel side asks
+--------------------------------------------------------------------------------
+
+local wantUntil = 0   -- reports sent until then (WANT_FOR after the last ping)
+local castStarted = {} -- cast GUIDs whose global cooldown was reported at the cast start
+
+-- withGcd: the cast starts the global cooldown now (instant spell, or a cast time spell's start);
+-- withOwn: the spell's own cooldown starts now (the cast succeeded)
+local function Report(id, castMs, withGcd, withOwn)
+	local name = ns.SpellNameIcon(id)
+	if not name then return end
+	local cdStart, cdDur, gStart, gDur, src = 0, 0, 0, 0, "-"
+	if withOwn then
+		local s, d = ReadCooldown(id)
+		local gcd = SpellGcd(id, name)
+		if s and d and d > gcd + 0.05 then -- the spell's own cooldown, as the game shows it
+			cdStart, cdDur, src = Ms(s), Ms(d), "x"
+			measured[name] = d
+		else
+			local own
+			own, src = OwnCooldown(id, name)
+			if own > 0 then cdStart, cdDur = castMs, Ms(own) end
+		end
+	end
+	if withGcd then
+		local gcd = SpellGcd(id, name)
+		if gcd > 0 then
+			local s, d = ReadCooldown(GCD_SPELL)
+			if s and d and d > 0 and d <= 2 then gStart, gDur = Ms(s), Ms(d) else gStart, gDur = castMs, Ms(gcd) end
+		end
+	end
+	if cdDur == 0 and gDur == 0 then return end
+	ns.SendComm(("RC:%d:%d:%d:%d:%d:%d:%s"):format(id, Ms(), cdStart, cdDur, gStart, gDur, src), CD_PREFIX)
+end
+
+local function OnOwnCast(event, castGUID, spellID)
+	spellID, castGUID = Num(spellID), Val(castGUID)
+	if not spellID or GetTime() >= wantUntil then return end
+	local castMs = Ms()
+	local started = castGUID and castStarted[castGUID]
+	if event == "UNIT_SPELLCAST_START" then
+		if castGUID then
+			if #castStarted > 50 then castStarted = {} end -- interrupted casts never succeed: forget them
+			castStarted[castGUID] = true
+			castStarted[#castStarted + 1] = castGUID
+		end
+	elseif castGUID then
+		castStarted[castGUID] = nil
+	end
+	-- next frame: the game has started the cooldown by then
+	C_Timer.After(0, function()
+		if event == "UNIT_SPELLCAST_START" then
+			Report(spellID, castMs, true, false)
+		else
+			Report(spellID, castMs, not started, true)
+		end
+	end)
+end
+
+--------------------------------------------------------------------------------
+-- Panel side (the priest): clock offset and the icons' cooldowns
+--------------------------------------------------------------------------------
+
+local samples = {}  -- { rtt, offset } in ms: this client's clock = the partner's + offset
+local offset, bestRtt
+local nextPing = 0
+local own = {}      -- spell name -> { start, dur } in s on this client's clock
+local gcdState      -- { start, dur }
+local last          -- last report: { name, src, at }
+
+local function OnGcd(id)
+	return SpellGcd(id, ns.SpellNameIcon(id)) > 0
+end
+
+UpdateCooldowns = function()
+	local now = GetTime()
+	for _, b in ipairs(icons) do
+		local best
+		local name = b.spell and ns.SpellNameIcon(b.spell)
+		local o = name and own[name]
+		if o and o.start + o.dur > now then best = o end
+		local g = gcdState
+		if g and b.spell and g.start + g.dur > now and OnGcd(b.spell) and (not best or g.start + g.dur > best.start + best.dur) then
+			best = g
+		end
+		if best then
+			b.cd:SetCooldown(best.start, best.dur)
+		elseif b.cd.Clear then
+			b.cd:Clear()
+		else
+			b.cd:SetCooldown(0, 0)
+		end
+	end
+end
+
+local function OnClockReply(t1, t2)
+	local t3 = Ms()
+	local rtt = t3 - t1
+	if rtt < 0 or rtt > 5000 then return end
+	table.insert(samples, { rtt = rtt, offset = (t1 + t3) / 2 - t2 })
+	if #samples > SAMPLES then table.remove(samples, 1) end
+	local best
+	for _, s in ipairs(samples) do if not best or s.rtt < best.rtt then best = s end end
+	offset, bestRtt = best.offset, best.rtt
+end
+
+local function OnCastReport(id, sent, cdStart, cdDur, gStart, gDur, src)
+	local recv = Ms()
+	-- the partner's clock (ms) -> this client's (s); without a ping answer yet, the message counts as instant
+	local function Here(ms) return (offset and ms + offset or ms - sent + recv) / 1000 end
+	local name = ns.SpellNameIcon(id)
+	if not name then return end
+	if cdDur > 0 then own[name] = { start = Here(cdStart), dur = cdDur / 1000 } end
+	if gDur > 0 then gcdState = { start = Here(gStart), dur = gDur / 1000 } end
+	last = { name = name, src = src, at = GetTime() }
+	UpdateCooldowns()
+end
+
+local function Tick()
+	C_Timer.After(1, Tick)
+	if not (panel:IsShown() and ns.PartnerUnit()) then return end
+	local now = GetTime()
+	if now < nextPing then return end
+	nextPing = now + (#samples < FIRST_SAMPLES and SYNC_FIRST or SYNC_EVERY)
+	ns.SendComm("RT:" .. Ms(), CD_PREFIX)
+end
+
+local SOURCES = { x = "exacte", m = "mesuree hors combat", b = "valeur du jeu", t = "infobulle", f = "table DuoBox", ["-"] = "-" }
+
+local function CooldownDebug()
+	if offset then
+		Say(("recharges : horloge du partenaire calee (aller-retour %d ms, decalage %d ms, %d mesures)")
+			:format(bestRtt, offset, #samples))
+	else
+		Say("recharges : pas encore de reponse du partenaire (panneau affiche ? meme version de DuoBox sur les deux ?)")
+	end
+	if last then
+		Say(("recharges : dernier sort recu : %s il y a %.0f s (recharge %s)"):format(last.name, GetTime() - last.at,
+			SOURCES[last.src] or last.src))
+	end
+end
+
+local cdEvents = CreateFrame("Frame")
+if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
+	C_ChatInfo.RegisterAddonMessagePrefix(CD_PREFIX)
+elseif RegisterAddonMessagePrefix then
+	RegisterAddonMessagePrefix(CD_PREFIX)
+end
+cdEvents:SetScript("OnEvent", function(_, event, ...)
+	if event == "CHAT_MSG_ADDON" then
+		local prefix, body, channel, sender = ...
+		if prefix ~= CD_PREFIX or channel ~= "PARTY" then return end
+		body = ns.FromPartner(body, sender)
+		if type(body) ~= "string" then return end
+		local t1 = body:match("^RT:(%d+)$")
+		if t1 then -- the panel side asks: answer with this clock, report the casts for a while
+			wantUntil = GetTime() + WANT_FOR
+			ns.SendComm(("RU:%s:%d"):format(t1, Ms()), CD_PREFIX)
+			return
+		end
+		local a, b = body:match("^RU:(%d+):(%d+)$")
+		if a then OnClockReply(tonumber(a), tonumber(b)); return end
+		local f = { body:match("^RC:(%d+):(%d+):(%d+):(%d+):(%d+):(%d+):([%a%-])$") }
+		if #f == 7 then
+			OnCastReport(tonumber(f[1]), tonumber(f[2]), tonumber(f[3]), tonumber(f[4]), tonumber(f[5]), tonumber(f[6]), f[7])
+		end
+	elseif event == "PLAYER_LOGIN" then
+		C_Timer.After(1, Tick)
+	else -- UNIT_SPELLCAST_START / _SUCCEEDED; another unit's payload can be secret: test it first
+		local unit, castGUID, spellID = ...
+		if Val(unit) == "player" then OnOwnCast(event, castGUID, spellID) end
+	end
+end)
+for _, e in ipairs({ "CHAT_MSG_ADDON", "PLAYER_LOGIN" }) do
+	pcall(cdEvents.RegisterEvent, cdEvents, e)
+end
+for _, e in ipairs({ "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_SUCCEEDED" }) do
+	if cdEvents.RegisterUnitEvent then
+		pcall(cdEvents.RegisterUnitEvent, cdEvents, e, "player") -- only this character's casts
+	else
+		pcall(cdEvents.RegisterEvent, cdEvents, e)
+	end
+end
 
 --------------------------------------------------------------------------------
 -- /duo panneau
@@ -276,6 +596,8 @@ function ns.RelayPanelCommand(arg)
 	elseif sub == "defaut" or sub == "reset" then
 		ns.Set("relayPanelSpells", ns.DEFAULTS.relayPanelSpells)
 		Say("panneau : " .. List())
+	elseif sub == "cd" or sub == "recharges" then
+		CooldownDebug()
 	elseif sub == "test" then
 		local n = tonumber(rest) or 2
 		if n < 1 or n > 36 or n % 1 ~= 0 then
@@ -284,7 +606,7 @@ function ns.RelayPanelCommand(arg)
 		end
 		Test(n)
 	else
-		Say("/duo panneau [on|off] | sorts <noms ou ID, separes par des virgules> | defaut | test [numero]")
+		Say("/duo panneau [on|off] | sorts <noms ou ID, separes par des virgules> | defaut | test [numero] | cd")
 	end
 end
 
