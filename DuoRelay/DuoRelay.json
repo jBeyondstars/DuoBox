@@ -102,6 +102,13 @@
       "pixel": 11,
       "keys": "SHIFT-3",
       "delayMs": 0
+    },
+    {
+      "name": "sweepingstrikes",
+      "label": "panel icon 12: Sweeping Strikes, key Shift+2 (the user's binding; saved bindings of 2026-11-07 had Shift+2 on stance button 2)",
+      "pixel": 12,
+      "keys": "SHIFT-2",
+      "delayMs": 0
     }
   ],
   "moves": [

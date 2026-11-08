@@ -56,6 +56,7 @@ local NAMES = {
 	["shield block"] = 2565, disarm = 676, intercept = 20252, whirlwind = 1680, pummel = 6552,
 	["berserker rage"] = 18499, ["intimidating shout"] = 5246, ["piercing howl"] = 12323,
 	["mortal strike"] = 12294, bloodthirst = 23881, ["shield slam"] = 23922, ["challenging shout"] = 1161,
+	["sweeping strikes"] = 12292,
 }
 
 -- Panel entries that are not spells: a key of the warrior's own all the same
@@ -394,6 +395,7 @@ local BASE_CD = {
 	[7384] = 5, [6343] = 4, [5246] = 180, [100] = 15, [355] = 10, [2687] = 60, [694] = 120, [72] = 12,
 	[6572] = 5, [676] = 60, [20230] = 1800, [2565] = 5, [20252] = 30, [1680] = 10, [6552] = 10,
 	[18499] = 30, [12294] = 6, [23881] = 6, [23922] = 6, [1161] = 600, [871] = 1800, [1719] = 1800,
+	[12292] = 30,
 }
 -- Spells off the global cooldown (next melee swing, Bloodrage)
 local OFF_GCD = { [78] = true, [845] = true, [2687] = true }

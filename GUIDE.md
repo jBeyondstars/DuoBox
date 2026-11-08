@@ -723,8 +723,9 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
   (the click works the same).
 - Default icons: **1** Victory Rush, **2** Slam, **3** Execute, **4** Thunder Clap, **5** Overpower,
   **6** Heroic Strike, **7** Cleave, **8** Hamstring, **9** Intimidating Shout, **10** Interagir (the warrior's
-  interact key, T: not a spell, so no cooldown and no blink), **11** Challenging Shout. After a DuoBox update that
-  adds icons, `/duo panneau defaut` on the priest takes the new list (the saved list is kept otherwise).
+  interact key, T: not a spell, so no cooldown and no blink), **11** Challenging Shout, **12** Sweeping Strikes
+  (12 icons: the panel is full). After a DuoBox update that adds icons, `/duo panneau defaut` on the priest takes
+  the new list (the saved list is kept otherwise).
   `/duo panneau sorts Victory Rush, Slam, 5308, interact` replaces them (English names of the usual warrior spells,
   spell IDs, or `interact`; 12 at most), `/duo panneau sorts` lists them with their numbers, `/duo panneau defaut`
   restores them.
@@ -747,7 +748,7 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
   one ends later. Heroic Strike and Cleave are off the global cooldown. The cooldown's length: read from the game
   when it shows it (out of combat), else the length read out of combat earlier in the session, the game's base
   value, the spell's tooltip, and last DuoBox's table (Overpower 5 s, Thunder Clap 4 s, Intimidating Shout 3 min,
-  Challenging Shout 10 min).
+  Challenging Shout 10 min, Sweeping Strikes 30 s).
   Not seen: resets and reductions in a fight (talents, procs), casts while the panel is hidden; addon messages
   may be blocked in some instances. Needs the same DuoBox version on both characters (`/reload` on both).
   `/duo panneau cd`: clock offset and round trip, last cast received and where its length came from.
@@ -760,7 +761,7 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
   the picture, and the clicks on the icons do nothing.
 - The icon number is the `"pixel"` of a trigger in `DuoRelay.json`, which holds the key PC 2 presses: keep both
   lists in the same order. Default triggers, read from the warrior's key bindings and combat journal (Execute and
-  Intimidating Shout: their bar slot told by the user; Challenging Shout: its key told by the user) on 2026-11-07:
+  Intimidating Shout: their bar slot told by the user; Challenging Shout and Sweeping Strikes: their key told by the user) on 2026-11-07 and 2026-11-08:
 
 | Icon | Spell | Key on PC 2 | Action bar slot |
 |---|---|---|---|
@@ -774,7 +775,8 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
 | 8 | Hamstring | `4` | 76 (Battle Stance page of the main bar, button 4) |
 | 9 | Intimidating Shout | `W` | 68 (Action Bar 2 = bottom left bar, button 8) |
 | 10 | Interagir | `T` | none: the interact key (INTERACTTARGET), what it takes on the warrior (NPC, object, or its enemy target) |
-| 11 | Challenging Shout | `Shift+3` | the button the user bound to Shift+3 (the warrior's saved bindings of 2026-11-06 had none on it) |
+| 11 | Challenging Shout | `Shift+3` | Action Bar 6, button 3 (MULTIACTIONBAR5BUTTON3 in the saved bindings of 2026-11-07) |
+| 12 | Sweeping Strikes | `Shift+2` | told by the user; the saved bindings of 2026-11-07 still had Shift+2 on stance bar button 2 (Defensive Stance): check it |
 
 - Main bar keys (`F4`, `5`, `C`, `1`, `Shift+C`, `4`) press the Battle Stance page: in another stance they press
   that stance's button.

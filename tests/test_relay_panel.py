@@ -29,7 +29,8 @@ end
 SPELLS = {[402927] = {"Victory Rush", 132342}, [1240193] = {"Slam", 132340}, [5308] = {"Execute", 135358},
           [6343] = {"Thunder Clap", 136105}, [7384] = {"Overpower", 132223}, [78] = {"Heroic Strike", 132282},
           [845] = {"Cleave", 132338}, [1715] = {"Hamstring", 132316}, [7386] = {"Sunder Armor", 132363},
-          [772] = {"Rend", 132155}, [355] = {"Taunt", 136080}, [1161] = {"Challenging Shout", 132091}}
+          [772] = {"Rend", 132155}, [355] = {"Taunt", 136080}, [1161] = {"Challenging Shout", 132091},
+          [12292] = {"Sweeping Strikes", 132306}}
 ns = {DEFAULTS = {relayPanelSpells = "402927,1240193,5308,6343,7384"}}
 function ns.GetDB() return db end
 function ns.Print(msg) table.insert(printed, msg) end
