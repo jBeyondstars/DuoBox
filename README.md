@@ -26,6 +26,7 @@ The diagram shows a few examples; see the [VoiceKeys setup and full command list
 - Optional combat journal (`/duo journal on`, off by default) and `tools/analyze_fights.py`: measures the warrior's dead time in hard fights from the journal and the game's combat log
 - Optional external **DuoRelay** (two PCs on one local network, off until switched on): a Ctrl+click on PC 1 presses the warrior's keys on PC 2. This is input broadcasting, which Blizzard forbids: use at your own risk ([GUIDE section 7](GUIDE.md#7-duorelay-ctrlclick-relayed-to-pc-2-optional-not-allowed-by-blizzard))
 - With DuoRelay, an optional **warrior spell panel** on the priest's screen (`/duo panneau`, off by default): a click on a spell icon makes PC 2 press that spell's action-bar key, so the warrior casts it ([GUIDE section 7](GUIDE.md#warrior-spell-panel-click-an-icon-on-pc-1))
+- With DuoRelay, optional **warrior camera and moves** from PC 1 (tab DuoRelay on the priest, off by default): Ctrl+Z held + the mouse turns the warrior's camera, Ctrl+Q / Ctrl+D / Ctrl+S held make it strafe or back up. The priest's game never gets these keys ([GUIDE section 7](GUIDE.md#warrior-camera-and-moves-from-pc-1-keys-the-priest-never-gets))
 
 ## Install
 Copy the `DuoBox` folder into `World of Warcraft\_forever_\Interface\AddOns\` (or `_classic_era_\Interface\AddOns\`) on both clients, then in game:

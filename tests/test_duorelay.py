@@ -1,7 +1,10 @@
 """Run with python -m unittest discover -s tests (Windows only: runs DuoRelay.ps1 -SelfTest).
 
 The self-test checks the config, click detection (click / drag / camera turn / long press),
-the message format, sender filtering and a loopback exchange on 127.0.0.1. It never presses a key.
+the message format, sender filtering and a loopback exchange on 127.0.0.1, the keys taken from
+the priest's game (KeyFilter), the status code of the priest's options, and PC 2's held moves and
+camera in a dry run. It never presses a key. (DuoRelay.ps1 -HookTest checks the real hook: it
+injects input, so it is not run here.)
 """
 from pathlib import Path
 import shutil

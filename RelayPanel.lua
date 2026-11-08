@@ -13,10 +13,16 @@
 -- from 1 to 6, N = (A - 1) * 6 + B. The complements make a chance match with
 -- the game's picture unlikely; full / off channels survive small colour shifts.
 -- DuoRelay.ps1 reads the same scheme (ConvertFrom-PixelCells).
+-- Status code, in the same squares whenever no icon code is drawn: 0 (black),
+-- 7 (white), S, 7 - S, S = camera (0 off, 1 camera only, 2 camera and the warrior
+-- turns) + 3 * moves (0 / 1), from the options DB.relayCamera, DB.relayCameraTurn
+-- and DB.relayMoves (tab DuoRelay, off by default). DuoRelay reads it every
+-- 0.25 s and only takes Ctrl+Z / Ctrl+Q / Ctrl+S / Ctrl+D from this game while
+-- it says so (ConvertFrom-StatusCells).
 -- Option DB.relayPanel (off by default); the spells, DB.relayPanelSpells, are
 -- only shown here (icon, tooltip): their order is the "pixel" number of the
 -- DuoRelay.json triggers. DB.relayPanelHidden: entries of that list whose icon
--- is hidden (Options > Automatisme), the others keep their number. /duo
+-- is hidden (Options > DuoRelay), the others keep their number. /duo
 -- panneau. Kept out of DuoBox.lua (Lua 5.1's 200 locals).
 -- Cooldowns on the icons, estimated: this client hides cooldowns from addons
 -- in combat (C_Spell.GetSpellCooldown is SecretWhenCooldownsRestricted, seen in
@@ -109,7 +115,7 @@ function ns.RelayPanelEntries()
 	return list
 end
 
--- Shows or hides an entry's icon (Options > Automatisme)
+-- Shows or hides an entry's icon (Options > DuoRelay)
 function ns.SetRelayPanelHidden(entry, hide)
 	local set, parts = Hidden(), {}
 	set[entry] = hide and true or nil
@@ -131,6 +137,17 @@ local function Code(n)
 end
 ns.RelayPanelCode = Code
 
+-- S of the status code, 0 = no option on (nothing drawn)
+local function StatusValue()
+	local db = DB()
+	if not db then return 0 end
+	local camera = db.relayCamera and (db.relayCameraTurn and 2 or 1) or 0
+	return camera + (db.relayMoves and 3 or 0)
+end
+ns.RelayStatusValue = StatusValue
+
+local function StatusCode(s) return { 0, 7, s, 7 - s } end
+
 -- A child of UIParent like every visible frame (with no parent, DuoRelay did
 -- not find the code in the corner, 2026-11-07; cause not proven), at its
 -- top-left corner = the window's, above everything; sizes in physical pixels
@@ -144,8 +161,9 @@ local squares = {}
 for i = 1, CELLS do
 	squares[i] = signal:CreateTexture(nil, "OVERLAY")
 end
-local lit           -- icon whose code is drawn (nil: /duo panneau test)
+local lit           -- icon whose code is drawn (nil: /duo panneau test, the status code or nothing)
 local testUntil = 0 -- /duo panneau test: code drawn without the mouse until then
+local status = 0    -- S of the status code drawn, 0 = none
 
 local function PhysicalHeight()
 	local _, height = 0, 0
@@ -159,34 +177,49 @@ local function PixelsPerUnit()
 	return PhysicalHeight() / 768 * signal:GetEffectiveScale()
 end
 
-local function Off()
-	lit, testUntil = nil, 0
-	signal:Hide()
-end
-
--- Draws the code of icon n; owner: the icon under the mouse
-local function Light(n, owner)
+-- Draws the 4 squares with these values (0-7)
+local function Draw(values)
 	local size = CELL / PixelsPerUnit()
 	signal:SetSize(size * CELLS, size)
-	for i, v in ipairs(Code(n)) do
+	for i, v in ipairs(values) do
 		local sq = squares[i]
 		sq:ClearAllPoints()
 		sq:SetSize(size, size)
 		sq:SetPoint("TOPLEFT", (i - 1) * size, 0)
 		sq:SetColorTexture(math.floor(v / 4) % 2, math.floor(v / 2) % 2, v % 2, 1)
 	end
-	lit, testUntil = owner, 0
 	signal:Show()
 end
 
--- Never left on: the icon hidden, or left without OnLeave; the test ends on time
+-- No icon code: the status code if an option asks for it, else nothing
+local function Off()
+	lit, testUntil = nil, 0
+	status = StatusValue()
+	if status > 0 then Draw(StatusCode(status)) else signal:Hide() end
+end
+
+-- Draws the code of icon n; owner: the icon under the mouse
+local function Light(n, owner)
+	Draw(Code(n))
+	lit, testUntil, status = owner, 0, 0
+end
+
+-- An icon code never stays: the icon hidden, or left without OnLeave; the test ends
+-- on time. The status code stays (redrawn when an option or the screen changes).
 signal:SetScript("OnUpdate", function()
 	if testUntil > 0 then
 		if GetTime() >= testUntil then Off() end
-	elseif not (lit and lit:IsVisible() and lit:IsMouseOver()) then
+	elseif lit and not (lit:IsVisible() and lit:IsMouseOver()) then
+		Off()
+	elseif not lit and status == 0 then
 		Off()
 	end
 end)
+
+-- Options changed (DuoBox.lua Set), screen or UI scale changed: redraws the status code
+function ns.RefreshRelayStatus()
+	if not lit and testUntil == 0 then Off() end
+end
 
 --------------------------------------------------------------------------------
 -- The panel
@@ -793,4 +826,8 @@ end
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
-events:SetScript("OnEvent", Refresh)
+for _, e in ipairs({ "UI_SCALE_CHANGED", "DISPLAY_SIZE_CHANGED" }) do pcall(events.RegisterEvent, events, e) end
+events:SetScript("OnEvent", function(_, event)
+	if event == "PLAYER_LOGIN" then Refresh() end
+	ns.RefreshRelayStatus() -- the status code, at its size in screen pixels
+end)

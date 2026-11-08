@@ -33,7 +33,11 @@ SPELLS = {[402927] = {"Victory Rush", 132342}, [1240193] = {"Slam", 132340}, [53
 ns = {DEFAULTS = {relayPanelSpells = "402927,1240193,5308,6343,7384"}}
 function ns.GetDB() return db end
 function ns.Print(msg) table.insert(printed, msg) end
-function ns.Set(key, value) db[key] = value; if ns.RefreshRelayPanel then ns.RefreshRelayPanel() end end
+function ns.Set(key, value)
+    db[key] = value
+    if ns.RefreshRelayPanel then ns.RefreshRelayPanel() end
+    if (key == "relayCamera" or key == "relayCameraTurn" or key == "relayMoves") and ns.RefreshRelayStatus then ns.RefreshRelayStatus() end
+end
 function ns.SpellNameIcon(id) local s = SPELLS[id]; if s then return s[1], s[2] end end
 function GetPhysicalScreenSize() return physical[1], physical[2] end
 sent, partner = {}, "party1"
@@ -188,6 +192,15 @@ function codeOf(i)
     return table.concat(bits, " "), size, table.concat(xs, ",")
 end
 function last() return printed[#printed] end
+-- The squares drawn now, as "rgb" bits
+function bits()
+    local list = {}
+    for _, t in ipairs(squares()) do list[#list + 1] = ("%d%d%d"):format(t.color[1], t.color[2], t.color[3]) end
+    return table.concat(list, " ")
+end
+function fire(event) for _, f in ipairs(frames) do
+    if f.events[event] and f.scripts.OnEvent then f.scripts.OnEvent(f, event) end
+end end
 '''
 
 
@@ -392,6 +405,49 @@ class RelayPanelTest(unittest.TestCase):
             tick(); assert(not signal().shown)
             enter(1); tick(); assert(signal().shown)       -- still over it: stays
         ''')
+
+    def test_status_code_follows_the_options(self):
+        # 0 black, 7 white, S, 7-S; S = camera (1 camera only, 2 the warrior turns) + 3 * moves
+        self.load()
+        self.run_lua('''
+            assert(not signal().shown)                                   -- no option: nothing drawn
+            ns.Set("relayMoves", true)
+            assert(signal().shown and bits() == "000 111 011 100", bits()) -- S = 3
+            ns.Set("relayCamera", true)
+            assert(bits() == "000 111 100 011", bits())                   -- S = 4, DuoRelay.ps1 -SelfTest's vector
+            ns.Set("relayCameraTurn", true)
+            assert(bits() == "000 111 101 010", bits())                   -- S = 5
+            ns.Set("relayMoves", false)
+            assert(bits() == "000 111 010 101", bits())                   -- S = 2
+            ns.Set("relayCamera", false)
+            assert(not signal().shown)                                   -- turn alone: nothing
+            assert(ns.RelayStatusValue() == 0)
+        ''')
+
+    def test_status_code_stays_and_icon_codes_take_over(self):
+        self.load('db.relayMoves = true')
+        self.run_lua('''
+            assert(signal().shown and bits() == "000 111 011 100", bits()) -- drawn at login
+            tick(); wait(30); assert(signal().shown and bits() == "000 111 011 100") -- stays
+            enter(2); assert(bits() == "001 110 010 101", bits())         -- the icon's code while hovered
+            leave(2); assert(signal().shown and bits() == "000 111 011 100", bits())
+            enter(2); mouseOver = nil; tick()                              -- left without OnLeave
+            assert(signal().shown and bits() == "000 111 011 100", bits())
+            ns.Set("relayMoves", false); enter(1); ns.Set("relayMoves", true) -- changed while an icon is hovered
+            assert(bits() == "001 110 001 110", bits())
+            leave(1); assert(bits() == "000 111 011 100", bits())
+            ns.RelayPanelCommand("test 7"); assert(bits() ~= "000 111 011 100")
+            wait(16); assert(signal().shown and bits() == "000 111 011 100", bits()) -- after the test
+            ns.Set("relayPanel", false); assert(signal().shown)            -- the panel hidden: the status stays
+        ''')
+
+    def test_status_code_size_follows_the_ui_scale(self):
+        self.load('db.relayCamera = true')
+        self.assertAlmostEqual(self.lua.eval("squares()[1].w"), 8 * 768 / 1080)
+        self.lua.execute('uiScale = 0.5; fire("UI_SCALE_CHANGED")')
+        self.assertAlmostEqual(self.lua.eval("squares()[1].w"), 8 * 768 / 1080 / 0.5)
+        self.lua.execute('physical = {2560, 1440}; fire("DISPLAY_SIZE_CHANGED")')
+        self.assertAlmostEqual(self.lua.eval("squares()[1].w"), 8 * 768 / 1440 / 0.5)
 
     def test_command_sets_the_spells_by_name_or_id(self):
         self.load()

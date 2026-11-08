@@ -104,6 +104,34 @@
       "delayMs": 0
     }
   ],
+  "moves": [
+    {
+      "name": "strafeleft",
+      "label": "strafe left: Q = STRAFELEFT on the warrior",
+      "key": "CTRL-Q",
+      "hold": "Q"
+    },
+    {
+      "name": "backward",
+      "label": "move back: S = MOVEBACKWARD on the warrior (WoW's default key)",
+      "key": "CTRL-S",
+      "hold": "S"
+    },
+    {
+      "name": "straferight",
+      "label": "strafe right: right arrow, to bind to STRAFERIGHT on the warrior (unbound now)",
+      "key": "CTRL-D",
+      "hold": "RIGHT"
+    }
+  ],
+  "camera": {
+    "key": "CTRL-Z",
+    "label": "hold and move the mouse: the warrior's camera (DuoBox on the priest, tab DuoRelay)",
+    "speed": 1.0
+  },
+  "maxHoldMs": 30000,
+  "maxCameraMs": 60000,
+  "streamTimeoutMs": 400,
   "delayMs": 150,
   "minIntervalMs": 500,
   "maxClickMovePx": 30,

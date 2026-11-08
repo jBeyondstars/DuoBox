@@ -10,8 +10,8 @@ local _, ns = ...
 local function DB() return ns.GetDB() end
 local Print = ns.Print
 
-local WIDTH, HEIGHT = 540, 540 -- 540 high: the warrior panel's icon list at the bottom of Automatisme
-local TABS = 6
+local WIDTH, HEIGHT = 620, 540 -- 620 wide: 7 tabs; 540 high: the warrior panel's icon list at the bottom of DuoRelay
+local TABS = 7
 local COL2 = 240 -- x of the second column, inside a page
 
 local panel = CreateFrame("Frame", "DuoBoxOptions", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
@@ -393,25 +393,6 @@ Toggle(auto, 0, -18, "autoInvite", "Accepter ses invitations de groupe")
 Toggle(auto, 0, -42, "autoQuest", "Accepter les quetes qu'il partage")
 Toggle(auto, 0, -66, "autoRez", "Accepter ses resurrections")
 
-Header(auto, COL2, 0, "DuoRelay (deux PC)")
-Toggle(auto, COL2, -18, "pickupRelay", "Ramassage relaye (Ctrl + clic droit)",
-	"Desactive par defaut, a activer sur les deux persos, avec DuoRelay lance. Ctrl + clic droit sur un objet "
-	.. "(filon, plante, objet de quete) : le partenaire ne ramasse que si son objet le plus proche porte le meme nom. "
-	.. "Sinon il ne fait rien et ton ecran dit ce qu'il vise. Meme type d'objet, pas forcement le meme exemplaire. "
-	.. "Hors combat seulement. Utilise la touche Ctrl+Maj+F9 chez le partenaire (GUIDE.md, section 7).")
-	:HookScript("OnClick", function() if ns.RefreshPickupRelay then ns.RefreshPickupRelay() end end)
-Toggle(auto, COL2, -42, "relayPanel", "Panneau des sorts du guerrier",
-	"Sur le pretre, desactive par defaut, avec DuoRelay lance sur les deux PC. Un clic sur une icone fait lancer "
-	.. "le sort au guerrier : DuoRelay presse sa touche de barre sur le PC 2 (rien ne se passe dans ce jeu). "
-	.. "Icone N = declencheur \"pixel\": N de DuoRelay.json. Fenetre ou plein ecran fenetre. "
-	.. "Recharges estimees sur les icones (le jeu les cache en combat) : meme version de DuoBox sur le guerrier. "
-	.. "/duo panneau sorts <liste> : changer les icones (GUIDE.md, section 7).")
-Slider(auto, COL2, -66, "relayPanelPerRow", "Icones par rangee (panneau guerrier)", 1, ns.RELAY_PANEL_MAX or 12, 1, "%d",
-	"Nombre d'icones sur chaque rangee du panneau des sorts du guerrier : 4 avec 8 sorts = 2 rangees de 4. "
-	.. "12 = une seule rangee.")
-Toggle(auto, COL2, -112, "relayPanelTooltip", "Infobulles des sorts (panneau guerrier)",
-	"Decoche : survoler une icone du panneau n'affiche plus l'infobulle du sort. Le clic fonctionne pareil.")
-
 Header(auto, 0, -104, "Quetes")
 Toggle(auto, 0, -122, "autoShare", "Partager automatiquement les quetes acceptees",
 	"Chaque quete prise est partagee au partenaire.")
@@ -456,12 +437,56 @@ Button(auto, 262, -281, 80, "Auto", function() ApplyTank("") end,
 	"Le membre du groupe au role Tank (clic droit sur son portrait > Role > Tank, ou appel aux roles).")
 local dungeonState = Note(auto, 0, -306, 450)
 
--- One box per icon of the warrior's spell panel (/duo panneau sorts), 3 per row
--- in panel order, the whole width (the left column's long labels cross COL2)
-Header(auto, 0, -340, "Icones du panneau des sorts du guerrier (decoche = masquee)")
+--------------------------------------------------------------------------------
+-- Page 4: DuoRelay, the external two-PC tool (GUIDE.md section 7). One column:
+-- the labels are long.
+--------------------------------------------------------------------------------
+
+local relay = NewPage("DuoRelay")
+
+Header(relay, 0, 0, "DuoRelay (deux PC)")
+Toggle(relay, 0, -18, "pickupRelay", "Ramassage relaye (Ctrl + clic droit)",
+	"Desactive par defaut, a activer sur les deux persos, avec DuoRelay lance. Ctrl + clic droit sur un objet "
+	.. "(filon, plante, objet de quete) : le partenaire ne ramasse que si son objet le plus proche porte le meme nom. "
+	.. "Sinon il ne fait rien et ton ecran dit ce qu'il vise. Meme type d'objet, pas forcement le meme exemplaire. "
+	.. "Hors combat seulement. Utilise la touche Ctrl+Maj+F9 chez le partenaire (GUIDE.md, section 7).")
+	:HookScript("OnClick", function() if ns.RefreshPickupRelay then ns.RefreshPickupRelay() end end)
+Toggle(relay, 0, -42, "relayPanel", "Panneau des sorts du guerrier",
+	"Sur le pretre, desactive par defaut, avec DuoRelay lance sur les deux PC. Un clic sur une icone fait lancer "
+	.. "le sort au guerrier : DuoRelay presse sa touche de barre sur le PC 2 (rien ne se passe dans ce jeu). "
+	.. "Icone N = declencheur \"pixel\": N de DuoRelay.json. Fenetre ou plein ecran fenetre. "
+	.. "Recharges estimees sur les icones (le jeu les cache en combat) : meme version de DuoBox sur le guerrier. "
+	.. "/duo panneau sorts <liste> : changer les icones (GUIDE.md, section 7).")
+Slider(relay, 0, -66, "relayPanelPerRow", "Icones par rangee (panneau guerrier)", 1, ns.RELAY_PANEL_MAX or 12, 1, "%d",
+	"Nombre d'icones sur chaque rangee du panneau des sorts du guerrier : 4 avec 8 sorts = 2 rangees de 4. "
+	.. "12 = une seule rangee.")
+Toggle(relay, 0, -112, "relayPanelTooltip", "Infobulles des sorts (panneau guerrier)",
+	"Decoche : survoler une icone du panneau n'affiche plus l'infobulle du sort. Le clic fonctionne pareil.")
+
+Header(relay, 0, -146, "Commandes du guerrier depuis le pretre (le pretre ne les recoit jamais)")
+Toggle(relay, 0, -164, "relayCamera", "Camera du guerrier : Ctrl+Z maintenu et la souris",
+	"Sur le pretre, desactive par defaut, avec DuoRelay lance sur les deux PC et le relais ON. Maintenir Ctrl+Z et "
+	.. "bouger la souris : la camera du guerrier tourne sur le PC 2 comme avec sa propre souris, le curseur du pretre "
+	.. "reste immobile. Ctrl+Z n'arrive jamais au jeu du pretre. Un clic de souris pendant ce temps rend la souris au "
+	.. "pretre (la camera du guerrier s'arrete). Ne demarre pas si un bouton de la souris est deja enfonce.")
+Toggle(relay, 22, -188, "relayCameraTurn", "Le guerrier tourne avec (clic droit chez lui ; decoche : clic gauche, camera seule)",
+	"Coche : DuoRelay maintient le clic droit chez le guerrier, il tourne avec sa camera (comme un clic droit glisse). "
+	.. "Decoche : le clic gauche, seule la camera tourne.")
+Toggle(relay, 0, -212, "relayMoves", "Deplacements du guerrier : Ctrl+Q / Ctrl+D pas chasses, Ctrl+S reculer",
+	"Sur le pretre, desactive par defaut, avec DuoRelay lance sur les deux PC et le relais ON. Tant que Ctrl+Q est "
+	.. "enfonce, le guerrier fait un pas chasse a gauche (Ctrl+D : a droite, Ctrl+S : il recule). Le pretre ne recoit "
+	.. "jamais ces touches. Chez le guerrier : Q = Deplacement lateral gauche, S = Reculer, et la fleche droite a lier a "
+	.. "Deplacement lateral droit. Touches modifiables dans DuoRelay.json (moves).")
+Note(relay, 0, -240, 560):SetText("|cff999999Coche, DuoBox dessine 4 petits carres en haut a gauche de l'ecran : "
+	.. "DuoRelay ne prend Ctrl+Z, Ctrl+Q, Ctrl+S et Ctrl+D au jeu du pretre que pendant qu'il les voit (relais ON, WoW au "
+	.. "premier plan, fenetre ou plein ecran fenetre). Ctrl reste enfonce chez le pretre : ses macros Ctrl = soi-meme. "
+	.. "GUIDE.md, section 7.|r")
+
+-- One box per icon of the warrior's spell panel (/duo panneau sorts), 3 per row in panel order
+Header(relay, 0, -300, "Icones du panneau des sorts du guerrier (decoche = masquee)")
 local relayBoxes = {}
 for i = 1, ns.RELAY_PANEL_MAX or 12 do
-	local cb = CheckBox(auto, ((i - 1) % 3) * 165, -358 - math.floor((i - 1) / 3) * 20, "")
+	local cb = CheckBox(relay, ((i - 1) % 3) * 165, -318 - math.floor((i - 1) / 3) * 20, "")
 	cb:SetSize(20, 20)
 	cb.label:SetFontObject("GameFontHighlightSmall")
 	cb:SetScript("OnClick", function(self) ns.SetRelayPanelHidden(self.entry, not self:GetChecked()) end)
@@ -492,7 +517,7 @@ controls[#controls + 1] = { Refresh = function()
 end }
 
 --------------------------------------------------------------------------------
--- Page 4: Display
+-- Page 5: Display
 --------------------------------------------------------------------------------
 
 local display = NewPage("Affichage")
@@ -552,7 +577,7 @@ Button(display, 0, -290, 200, "Scanner maintenant", Run("tracking scan"),
 	"Lance un passage de verification si une detection de minerais ou de plantes est active.")
 
 --------------------------------------------------------------------------------
--- Page 5: RestedXP
+-- Page 6: RestedXP
 --------------------------------------------------------------------------------
 
 local rxpPage = NewPage("RestedXP")
@@ -566,7 +591,7 @@ Button(rxpPage, 0, -80, 200, "Resynchroniser", Run("rxp sync"), "Renvoie les jou
 local rxpState = Note(rxpPage, 0, -114, 450)
 
 --------------------------------------------------------------------------------
--- Page 6: Profiles (Profiles.lua)
+-- Page 7: Profiles (Profiles.lua)
 --------------------------------------------------------------------------------
 
 local profPage = NewPage("Profils")

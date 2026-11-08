@@ -625,8 +625,8 @@ DuoRelay then tells PC 2, which presses **Shift+T, then T** in the warrior's WoW
 take the partner's target, then the interact key. The warrior walks to the mob and attacks it, or talks to the NPC.
 
 A **Ctrl+right click** on an object (ore vein, herb, quest object...) interacts with it on the priest, as usual,
-and the warrior picks up **the same kind of object**. Needs the DuoBox option **Automatisme > DuoRelay > Ramassage
-relaye** on **both** characters (off by default):
+and the warrior picks up **the same kind of object**. Needs the DuoBox option **DuoRelay > Ramassage relaye** (tab DuoRelay of the
+options) on **both** characters (off by default):
 - An object cannot be targeted, and this client gives no identifier for the object under the mouse (checked in
   game). The priest's DuoBox reads its **name** from the tooltip ("Copper Vein") and sends it to the warrior.
 - PC 2 presses **Ctrl+Shift+F9**, 0.5 s after the click (`delayMs` of the `pickup` trigger), so the name arrives first.
@@ -671,6 +671,7 @@ Folder `DuoBox\DuoRelay` (Windows PowerShell 5.1, nothing to install). Same fold
 | `Relais PC 2 : ON - PC 2 injoignable` | No answer: PC 2 script not started, firewall, wrong address |
 | `Relais PC 2 : ON - WoW pas actif sur PC 2` | Click the warrior's WoW window on PC 2 |
 | `Relais -> PC 2 : OK` | PC 2 pressed the keys |
+| `Relais PC 2 : ON (camera, deplacements)` | The priest's options ask for the warrior camera / moves (below) |
 
 **What is relayed**
 - Only a click in WoW on PC 1 with Ctrl and no other modifier. Left / right buttons (they turn the camera when
@@ -698,6 +699,8 @@ Folder `DuoBox\DuoRelay` (Windows PowerShell 5.1, nothing to install). Same fold
 - `delayMs`, `minIntervalMs`, `maxClickMovePx`, `maxClickMs`: timings above.
 - `overlay` (label on/off), `overlayX` (`-1` = centered), `overlayY`; `sounds` (beep on ON/OFF, `false` by default).
 - `processNames`: WoW executables that count as "WoW in the foreground".
+- `moves`, `camera`, `maxHoldMs`, `maxCameraMs`, `streamTimeoutMs`: warrior moves and camera, see
+  [Warrior camera and moves](#warrior-camera-and-moves-from-pc-1-keys-the-priest-never-gets).
 
 PC 2 only accepts messages from PC 1 (`pc1Address`) or, without it, from a private network address. Messages
 carry no password: anyone on your local network could make the warrior press the configured keys.
@@ -709,14 +712,14 @@ A row of the warrior's spell icons on the priest's screen. With the relay ON, a 
 PC 2 press that spell's **action-bar key** in the warrior's WoW: the warrior casts it. It is meant for the spells
 the Rotation key handles badly: one macro run tries only one spell on the global cooldown, and Victory Rush and
 Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
-- Priest only: **Automatisme > DuoRelay > Panneau des sorts du guerrier**, or `/duo panneau` (off by default).
+- Priest only: **DuoRelay > Panneau des sorts du guerrier** (tab DuoRelay), or `/duo panneau` (off by default).
   PC 2 presses the warrior's own keys; the warrior's DuoBox only reports its casts for the cooldowns (below),
   nothing to switch on there.
 - Above the icons, the warrior's **rage bar** with its value (mana for a hunter; `Guerrier` when no partner is in
   the group). Drag it to move the panel. The game may hide the partner's rage from addons in combat: the bar and
   its number are handed the game's values as they are (the game draws hidden values), so it still shows them.
   The icons are plain frames: a click on them does nothing in the priest's game, in or out of combat. The tooltip
-  shows the spell and the icon's number; **Automatisme > DuoRelay > Infobulles des sorts** unchecked hides it
+  shows the spell and the icon's number; **DuoRelay > Infobulles des sorts** unchecked hides it
   (the click works the same).
 - Default icons: **1** Victory Rush, **2** Slam, **3** Execute, **4** Thunder Clap, **5** Overpower,
   **6** Heroic Strike, **7** Cleave, **8** Hamstring, **9** Intimidating Shout, **10** Interagir (the warrior's
@@ -725,10 +728,10 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
   `/duo panneau sorts Victory Rush, Slam, 5308, interact` replaces them (English names of the usual warrior spells,
   spell IDs, or `interact`; 12 at most), `/duo panneau sorts` lists them with their numbers, `/duo panneau defaut`
   restores them.
-- **Show or hide icons**: at the bottom of **Automatisme**, "Icones du panneau des sorts du guerrier" has one box
+- **Show or hide icons**: at the bottom of the **DuoRelay** tab, "Icones du panneau des sorts du guerrier" has one box
   per icon of the list. Unticked, the icon leaves the panel and the others close the gap, but every icon keeps its
   number, so `DuoRelay.json` stays the same. `/duo panneau sorts` marks the hidden ones `(masque)`.
-- **Automatisme > DuoRelay > Icones par rangee**: icons per row (1 to 12, 12 by default = one row);
+- **DuoRelay > Icones par rangee**: icons per row (1 to 12, 12 by default = one row);
   4 with 8 spells gives 2 rows of 4. Hidden icons take no place.
 - **Blinking icons**: Overpower, Execute and Victory Rush (and Revenge if it is in the panel) blink as soon as the
   warrior's game lights them up, **yellow** when castable, **blue** when lit but short of rage. Same detection as
@@ -790,3 +793,46 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
   `/duo panneau test [N]` draws icon N's code (2 by default) for 15 s without the mouse and says in the chat where
   it is (`coin a x=0 y=0 px, carres de 8 px`); keep the relay OFF meanwhile, a left click would relay it.
   `no code` with the game's colours during the test: the code is not where DuoRelay reads; send the chat line.
+
+### Warrior camera and moves from PC 1 (keys the priest never gets)
+With the relay ON, four keys held on PC 1 act **only in the warrior's game**: DuoRelay takes them before the
+priest's game sees them.
+- **Ctrl+Q** held: the warrior strafes left; **Ctrl+D**: strafes right; **Ctrl+S**: moves back. PC 2 holds the
+  warrior's key while you hold yours and releases it when you let go.
+- **Ctrl+Z** held + the mouse: the warrior's camera turns, as with a mouse plugged into PC 2. The priest's cursor
+  stays where it is. Let go of Ctrl+Z (Z alone is enough) to stop.
+- Priest only, tab **DuoRelay** of the options, off by default: **Camera du guerrier**, **Le guerrier tourne avec**
+  (PC 2 holds the right button: the warrior turns with its camera; unticked: the left button, camera only) and
+  **Deplacements du guerrier**.
+- How the priest is kept out:
+  - A keyboard hook on PC 1 takes the press at its first key down with exactly Ctrl (Ctrl+Shift+Q is not taken),
+    then its repeats and its release. The priest's game never sees any part of it, neither as a key message nor
+    as raw input (checked with the hook on 2026-11-08). A press that started without Ctrl (Q held, then Ctrl) stays
+    the priest's. Ctrl itself reaches the priest: while you hold it, the priest's Ctrl macros target yourself.
+  - Only while the relay is ON, WoW is the foreground window on PC 1 and the priest's DuoBox shows its **status
+    code**: with one of these options ticked, DuoBox draws 4 small squares in the top-left corner (black, white and
+    two colours) whenever no icon code is drawn, and DuoRelay reads them every 0.25 s. Options unticked, interface
+    hidden (Alt+Z), exclusive fullscreen or relay OFF: these keys are the priest's again.
+  - A mouse button pressed during Ctrl+Z ends the camera turn and goes to the priest: a hook cannot hide the mouse
+    from a game that reads raw input (checked), so the camera never keeps the mouse while a button is down. For the
+    same reason it does not start while a mouse button is held or while the priest's game turns its own camera
+    (cursor hidden): the label says `Camera PC 2 : lacher les boutons de la souris avant`.
+- Camera on PC 2: the mouse's raw movement arrives about 200 times a second. PC 2 puts its cursor over the game
+  world (middle of the window, upper third), holds the button from the first movement on and moves its mouse by the
+  same amounts. A turn that moved less than 12 px is topped up to 12 px before the button is released: a press and
+  release without movement would be a click (interact, or a Click-to-Move walk).
+- Safety: PC 1 confirms each held key every 100 ms and the camera at least every 100 ms. PC 2 releases what it no
+  longer hears about after 0.4 s (`streamTimeoutMs`), and everything when its WoW leaves the foreground or when its
+  script stops. A move held over 30 s (`maxHoldMs`) or a camera turn over 60 s (`maxCameraMs`) is released on PC 2:
+  press again.
+- On the warrior: Q = **Strafe Left** (bound), S = **Move Backward** (WoW's default key), and **Strafe Right** has no
+  key: bind it to the **right arrow**, or change `hold` of `straferight` in `DuoRelay.json`. PC 2 holds bare keys,
+  never Ctrl, so the pedal and the other relays keep working meanwhile.
+- `DuoRelay.json`: `moves` = list of `{ name, label, key, hold }` (`key`: the chord taken on PC 1; `hold`: one key
+  without modifier, held on PC 2; arrows are `LEFT`, `RIGHT`, `UP`, `DOWN`); `camera` = `{ key, label, speed }`
+  (`speed` multiplies the movement, 1 by default). The same file on both PCs.
+- Labels on PC 1: `Relais PC 2 : ON (camera, deplacements)` (what the priest's options ask for), `Deplacement -> PC 2`,
+  `Camera -> PC 2`, or `... : WoW pas actif sur PC 2` / `... : PC 2 injoignable` while you hold the key.
+- Checks: `DuoRelay.ps1 -PixelProbe` shows `status 4 -> warrior commands: camera only, moves` over WoW.
+  `DuoRelay.ps1 -HookTest` checks the keyboard hook and the camera mode on the PC where it runs, with Ctrl+F13 /
+  Ctrl+F14 and a few pixels of mouse (hands off for 3 s; nothing is sent).

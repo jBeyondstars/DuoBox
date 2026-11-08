@@ -58,9 +58,12 @@ local defaults = {
 	coneHeight  = 100,    -- %: how far under the partner's nameplate the cone starts (its feet)
 	relayPanel  = false,  -- DuoRelay: panel of the warrior's spells, a click = the warrior casts it (RelayPanel.lua)
 	relayPanelSpells = "402927,1240193,5308,6343,7384,78,845,1715,5246,interact,1161", -- its icons, in DuoRelay.json "pixel" order: Victory Rush, Slam, Execute, Thunder Clap, Overpower, Heroic Strike, Cleave, Hamstring, Intimidating Shout, the interact key, Challenging Shout
-	relayPanelHidden = "", -- entries of that list whose icon is hidden (Options > Automatisme)
-	relayPanelPerRow = 12, -- icons per row of that panel (Options > Automatisme)
+	relayPanelHidden = "", -- entries of that list whose icon is hidden (Options > DuoRelay)
+	relayPanelPerRow = 12, -- icons per row of that panel (Options > DuoRelay)
 	relayPanelTooltip = true, -- spell tooltips on that panel's icons
+	relayCamera = false,     -- DuoRelay, priest: Ctrl+Z held + mouse = the warrior's camera, never the priest's (RelayPanel.lua status code)
+	relayCameraTurn = false, -- with it: PC 2 holds the right button (the warrior turns too), else the left one (camera only)
+	relayMoves = false,      -- DuoRelay, priest: Ctrl+Q / Ctrl+S / Ctrl+D held = the warrior strafes / backs up, never the priest
 }
 
 local DB
@@ -2368,6 +2371,7 @@ local function Set(key, value)
 	if key == "journal" and ns.RefreshJournal then ns.RefreshJournal() end
 	if (key == "facingCone" or key == "coneHeight") and ns.RefreshCone then ns.RefreshCone(key) end
 	if (key == "relayPanel" or key == "relayPanelSpells" or key == "relayPanelPerRow" or key == "relayPanelHidden") and ns.RefreshRelayPanel then ns.RefreshRelayPanel() end
+	if (key == "relayCamera" or key == "relayCameraTurn" or key == "relayMoves") and ns.RefreshRelayStatus then ns.RefreshRelayStatus() end
 	if key == "rotation" and ns.RotationChanged then ns.RotationChanged() end -- loaded by a profile
 	if (key == "tracking" or key == "partner") and ns.RefreshTracking then
 		ns.RefreshTracking()
