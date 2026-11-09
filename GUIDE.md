@@ -684,19 +684,35 @@ Folder `DuoBox\DuoRelay` (Windows PowerShell 5.1, nothing to install). Same fold
   at all: the script did not see the button (mouse software turning it into a key, see above).
 - **Any** Ctrl+click in the WoW window counts, even on the interface (Ctrl+click on an item = dressing room)
   or on the ground. In that case the warrior assists the priest's current target. Switch the relay OFF when you don't need it.
-- PC 2 waits `delayMs` (150 ms) before pressing the keys. The priest's new target has to reach the warrior's
-  client through the game server first, otherwise `/assist` takes the previous target. If the warrior takes
-  the old target, raise it to 400–500.
+- The priest's new target has to reach the warrior's client through the game server before PC 2 presses the
+  keys, otherwise `/assist` takes the previous target. It arrives 0.1 to 0.4 s after the click: in the warrior's
+  journal of 2026-11-08/09, 183 of 481 Shift+T presses on a fresh target came before it with a fixed 150 ms wait.
+  - **Target wait** (`"waitTarget": true`, the `interact` trigger): tick *Ctrl + clic : le guerrier attend la
+    nouvelle cible du pretre* (DuoBox options, tab DuoRelay) on **both** characters. Both DuoBoxes then draw 8
+    more small squares in the top-left corner, right of the 4 of the panel code: their own target's code and
+    their partner's target's code (a hash of the GUID, 63 values). PC 1 reads the priest's code just after the
+    click (`targetSettleMs`, 150 ms at most; at once when it changes) and sends it; PC 2 presses as soon as the
+    warrior's game shows that code for its partner's target, `targetWaitMs` (1 s) at most. A click on the target
+    the priest already has: no wait on PC 2. The PC 2 window says how long it waited
+    (`the warrior sees the priest's target after 230 ms`). Two targets share a code 1 time in 63: PC 2 then
+    presses at once, as before.
+  - Without the squares (option off on one side, an unknown GUID, dungeon mode where the warrior assists the
+    tank): PC 2 waits `delayMs` (150 ms), and its window says why. If the warrior then takes the old target, raise
+    it to 400–500.
+  - `DuoRelay.ps1 -PixelProbe` over WoW shows the codes it reads (`targets: mine 23, partner's 41`). On PC 2,
+    the partner's code must change when the priest changes target.
+  - The foot pedal does not go through DuoRelay: it has no wait at all, press it a moment after the click.
 - One action per `minIntervalMs` (0.5 s): a double click presses the keys once.
 
 **`DuoRelay.json`** (shared by both PCs; IP addresses go to `DuoRelay.local.json`, which is per PC and not in git)
-- `triggers`: list of `{ name, label, modifier, button, keys, delayMs }`. `modifier`: `CTRL`, `ALT`, `SHIFT`, or a mix
+- `triggers`: list of `{ name, label, modifier, button, keys, delayMs, waitTarget }`. `modifier`: `CTRL`, `ALT`, `SHIFT`, or a mix
   such as `CTRL-SHIFT` (required). `button`: `LEFT`, `RIGHT`, `MIDDLE`, `X1`, `X2`. `keys`: same format as
   VoiceKeys (`"SHIFT-T, T"`). `delayMs` (optional): this trigger's wait, instead of the global one.
+  `waitTarget` (optional, `false` by default): the target wait above.
   Default: `interact` (Ctrl+left, `SHIFT-T, T`), `pickup` (Ctrl+right, `CTRL-SHIFT-F9` after 500 ms) and
   `follow` (Ctrl+button 4 = `X1`, `F1` at once; button 5 is `X2`).
 - `toggleKey` (`CTRL-ALT-D`), `startEnabled` (`false`), `port` (`47815`; run the firewall setup again if you change it).
-- `delayMs`, `minIntervalMs`, `maxClickMovePx`, `maxClickMs`: timings above.
+- `delayMs`, `minIntervalMs`, `maxClickMovePx`, `maxClickMs`, `targetSettleMs`, `targetWaitMs`: timings above.
 - `overlay` (label on/off), `overlayX` (`-1` = centered), `overlayY`; `sounds` (beep on ON/OFF, `false` by default).
 - `processNames`: WoW executables that count as "WoW in the foreground".
 - `moves`, `camera`, `maxHoldMs`, `maxCameraMs`, `streamTimeoutMs`: warrior moves and camera, see

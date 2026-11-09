@@ -5,10 +5,11 @@
   "triggers": [
     {
       "name": "interact",
-      "label": "partner's target + interact key (like the pedal)",
+      "label": "partner's target + interact key (like the pedal); waits until the warrior sees the priest's new target (DuoBox option relayTarget on both)",
       "modifier": "CTRL",
       "button": "LEFT",
-      "keys": "SHIFT-T, T"
+      "keys": "SHIFT-T, T",
+      "waitTarget": true
     },
     {
       "name": "pickup",
@@ -140,6 +141,8 @@
   "maxCameraMs": 60000,
   "streamTimeoutMs": 400,
   "delayMs": 150,
+  "targetSettleMs": 150,
+  "targetWaitMs": 1000,
   "minIntervalMs": 500,
   "maxClickMovePx": 30,
   "maxClickMs": 500,

@@ -11,6 +11,11 @@
     the warrior's client through the game server first), then presses the
     trigger's keys in WoW ("SHIFT-T, T" = take the partner's target, then the
     interact key), only if WoW is the foreground window.
+    Target wait ("waitTarget" triggers, DuoBox option "relayTarget" ticked on
+    both characters): both DuoBoxes draw target codes in the corner. PC 1 sends
+    the priest's code read just after the click; PC 2 presses as soon as the
+    warrior's game shows the same code for its partner's target (targetWaitMs
+    at most) instead of waiting delayMs. No code on a screen: delayMs, as before.
     Panel icons (DuoBox RelayPanel.lua): while the mouse is over icon N of the
     DuoBox spell panel, the addon draws a small colour code in the top-left
     corner of the WoW window. A left press in WoW (any modifier) reads those
@@ -33,7 +38,7 @@
       DuoRelay.ps1 -Role Receiver
       DuoRelay.ps1 -SetupFirewall      (PC 2, once: lets PC 1's messages in)
       DuoRelay.ps1 -SelfTest           (no network beyond 127.0.0.1, no key press)
-      DuoRelay.ps1 -PixelProbe         (PC 1: shows the panel code read in WoW, sends nothing)
+      DuoRelay.ps1 -PixelProbe         (shows the panel and target codes read in WoW, sends nothing)
       DuoRelay.ps1 -HookTest           (the keyboard hook and the camera mode on this PC, with
                                         Ctrl+F13 / Ctrl+F14 and a few pixels of mouse, sends nothing)
     Ctrl+C to quit.
@@ -607,6 +612,8 @@ $Defaults = [ordered]@{
     moves = @(); camera = $null
     maxHoldMs = 30000; maxCameraMs = 60000   # a move / a camera turn held longer is released on PC 2
     streamTimeoutMs = 400                     # PC 2 releases what PC 1 stopped confirming (every 100 ms)
+    targetSettleMs = 150  # PC 1: time for the priest's game to draw its new target code after the click
+    targetWaitMs = 1000   # PC 2: longest wait for the warrior's game to show that target ("waitTarget" triggers)
 }
 # Per-PC settings (IP addresses), written by the script, not in git
 $LocalConfig = [IO.Path]::ChangeExtension($Config, '.local.json')
@@ -648,6 +655,7 @@ function ConvertTo-Trigger($t) {
         return [pscustomobject]@{
             name = $name; label = [string]$t.label; keys = [string]$t.keys; chords = (ConvertTo-Chords $t.keys); delayMs = $delay
             combo = "click on icon $code"; pixel = $code; buttonVk = 0; mods = @(); state = @{ wasDown = $false; armed = $false }; drag = $false
+            waitTarget = $false
         }
     }
     $button = ([string]$t.button).Trim().ToUpper()
@@ -663,6 +671,7 @@ function ConvertTo-Trigger($t) {
         combo = ('{0}+{1} click' -f ([string]$t.modifier).ToUpper(), $button.ToLower()); pixel = 0
         buttonVk = $MouseButtons[$button]; mods = $mods; state = @{ wasDown = $false; armed = $false }
         drag = ($button -eq 'LEFT' -or $button -eq 'RIGHT') # the buttons that turn the camera when dragged
+        waitTarget = [bool]$t.waitTarget # PC 2 waits for the warrior to see the priest's target (target codes)
     }
 }
 
@@ -811,12 +820,53 @@ function Format-Cells($rgb) {
     return (@($rgb) | ForEach-Object { '#{0:X6}' -f $_ }) -join ' '
 }
 
+# Target codes (DuoBox option "relayTarget", RelayPanel.lua), in squares 5-8 (this character's
+# target) and 9-12 (the target its assists take: the partner's, as this client sees it).
+# V = A * 8 + B (0 = no target, 1-63 = a hash of the GUID), drawn A, 7-A, B, 7-B.
+# -1 = no code: option off, unknown target (4 black squares), unreadable screen.
+function ConvertFrom-TargetCells($rgb) {
+    $v = Get-CellValues $rgb
+    if ($null -eq $v) { return -1 }
+    if ($v[1] -ne 7 - $v[0] -or $v[3] -ne 7 - $v[2]) { return -1 }
+    return $v[0] * 8 + $v[2]
+}
+
+# V -> the 4 colours DuoBox draws (self-test)
+function ConvertTo-TargetCells([int]$v) {
+    $a = [int][math]::Floor($v / 8); $b = $v % 8
+    return ConvertTo-Cells @($a, (7 - $a), $b, (7 - $b))
+}
+
+# The 12 squares in the corner of the foreground window (WoW), $null if unreadable
+function Read-CornerCells {
+    try { return [RelayInput]::ReadCells([RelayInput]::GetForegroundWindow(), [int]$cfg.pixelCell, 12) }
+    catch { Write-Log ("Screen read failed: {0}" -f $_.Exception.Message) 'DarkYellow'; return $null }
+}
+
+# Target code in those 12 squares: part 1 = this character's target, 2 = its assists' target
+function Get-TargetCode($rgb, [int]$part) {
+    if ($null -eq $rgb -or @($rgb).Count -lt 12) { return -1 }
+    $first = 4 * $part
+    return ConvertFrom-TargetCells @($rgb[$first..($first + 3)])
+}
+
+# PC 1, after the click of a "waitTarget" trigger: the priest's target code to send, or -2 =
+# not yet. A code different from the one read when the button went down is the click's new
+# target; none within targetSettleMs: the click did not change the target (same unit, ground)
+function Step-TargetSettle($w, [int]$code, [long]$now) {
+    if ($code -ge 0 -and $code -ne $w.before) { return $code }
+    if ($now -lt $w.until) { return -2 }
+    if ($code -ge 0) { return $code }
+    return $w.before
+}
+
 # --- Protocol ----------------------------------------------------------------
 # One ASCII datagram: DUORELAY1|<seq>|<kind>|<arg>
-#   PC 1 -> PC 2: CLICK|<trigger name>, PING|
+#   PC 1 -> PC 2: CLICK|<trigger name>, or CLICK|<trigger name>.<V> (the priest's target code), PING|
 #     moves: DOWN|<move name> at the press, KEEP|<name> every 100 ms while held, UP|<name> (sent twice)
 #     camera: CAM|<L or R>_<dx>_<dy> (raw mouse counts, at least every 100 ms), CAMEND| (sent twice)
-#   PC 2 -> PC 1: ACK|sent|held|notfocused|busy|unknown (same seq; CLICK and DOWN only),
+#   PC 2 -> PC 1: ACK|sent|held|notfocused|busy|unknown|replaced (same seq; CLICK and DOWN only;
+#                 replaced: a CLICK still waiting for its target when the next one came),
 #                 PONG|1 or 0 (WoW in the foreground)
 #   PC 2 releases a held key or the camera button when PC 1 stops confirming it (streamTimeoutMs).
 
@@ -827,7 +877,7 @@ function ConvertFrom-RelayMessage([string]$text) {
     if ($p.Count -ne 4 -or $p[0] -ne $Proto) { return $null }
     $seq = [long]0
     if (-not [long]::TryParse($p[1], [ref]$seq)) { return $null }
-    if ($p[2] -cnotmatch '^[A-Z]+$' -or $p[3] -notmatch '^[A-Za-z0-9_-]*$') { return $null }
+    if ($p[2] -cnotmatch '^[A-Z]+$' -or $p[3] -notmatch '^[A-Za-z0-9_.-]*$') { return $null }
     return [pscustomobject]@{ seq = $seq; kind = $p[2]; arg = $p[3] }
 }
 
@@ -1029,9 +1079,12 @@ function Invoke-RelayPacket([string]$text, $state) {
     if ($m.kind -eq 'CAMEND') { Stop-Camera $state ''; return $null }
     if ($m.kind -ne 'CLICK') { return $null }
 
-    $t = $state.triggers[$m.arg]
+    # "interact.23": the trigger, then the priest's target code read by PC 1
+    $name = $m.arg; $want = -1
+    if ($m.arg -match '^(.+)\.(\d{1,2})$') { $name = $Matches[1]; $want = [int]$Matches[2] }
+    $t = $state.triggers[$name]
     if (-not $t) {
-        Write-Log ("Unknown trigger '{0}': same DuoRelay.json on both PCs?" -f $m.arg) 'Yellow'
+        Write-Log ("Unknown trigger '{0}': same DuoRelay.json on both PCs?" -f $name) 'Yellow'
         return New-RelayMessage $m.seq 'ACK' 'unknown'
     }
     $now = $state.clock.ElapsedMilliseconds
@@ -1044,10 +1097,54 @@ function Invoke-RelayPacket([string]$text, $state) {
         return New-RelayMessage $m.seq 'ACK' 'notfocused'
     }
     $state.lastFired = $now
+    $replies = @()
+    if ($state.waiting) {
+        # The previous click's target never showed, and the priest has clicked again: its keys would go to the old target
+        $old = $state.waiting; $state.waiting = $null
+        Write-Log ("{0} dropped: target not seen after {1} ms, the next click came" -f $old.t.name, ($now - $old.since)) 'DarkYellow'
+        $replies += New-RelayMessage $old.seq 'ACK' 'replaced'
+    }
+    $note = ''
+    if ($t.waitTarget) {
+        if ($want -ge 0) {
+            $code = [int](& $state.readTarget)
+            if ($code -ge 0) {
+                # Pressed by Step-ReceiverWait: at once if the warrior already sees that target
+                $state.waiting = @{ t = $t; want = $want; seq = $m.seq; since = $now; until = $now + [int]$cfg.targetWaitMs; to = $state.from }
+                $reply = Step-ReceiverWait $state $now $code
+                if ($reply) { $replies += $reply }
+                return $replies
+            }
+            $note = " (no target code on this screen: DuoBox option relayTarget on the warrior? Fixed $($t.delayMs) ms)"
+        } else {
+            $note = " (no target code from PC 1: DuoBox option relayTarget on the priest? Fixed $($t.delayMs) ms)"
+        }
+    }
     if ($t.delayMs -gt 0 -and -not $script:NoDelay) { Start-Sleep -Milliseconds $t.delayMs }
     if (-not $script:DryRun) { Send-Chords $t.chords }
-    Write-Log ("{0,-12} -> {1}" -f $t.name, $t.keys) 'White'
-    return New-RelayMessage $m.seq 'ACK' 'sent'
+    Write-Log ("{0,-12} -> {1}{2}" -f $t.name, $t.keys, $note) 'White'
+    $replies += New-RelayMessage $m.seq 'ACK' 'sent'
+    return $replies
+}
+
+# PC 2: a press waiting for the warrior's game to show the priest's target (target codes).
+# $code = the warrior's code for its partner's target, read now. Presses when it is the one
+# PC 1 sent, or at targetWaitMs anyway; returns the ACK then, else $null.
+function Step-ReceiverWait($state, [long]$now, [int]$code) {
+    $w = $state.waiting
+    if (-not $w) { return $null }
+    $seen = $code -eq $w.want
+    if (-not $seen -and $now -lt $w.until) { return $null }
+    $state.waiting = $null
+    $ms = $now - $w.since
+    if (-not (Test-WowForeground)) {
+        Write-Log ("{0} not pressed: WoW left the foreground on this PC while waiting for the target." -f $w.t.name) 'Yellow'
+        return New-RelayMessage $w.seq 'ACK' 'notfocused'
+    }
+    if (-not $script:DryRun) { Send-Chords $w.t.chords }
+    if ($seen) { Write-Log ("{0,-12} -> {1} (the warrior sees the priest's target after {2} ms)" -f $w.t.name, $w.t.keys, $ms) 'White' }
+    else { Write-Log ("{0,-12} -> {1} (priest's target not seen in {2} ms: pressed anyway)" -f $w.t.name, $w.t.keys, $ms) 'Yellow' }
+    return New-RelayMessage $w.seq 'ACK' 'sent'
 }
 
 # --- Roles -------------------------------------------------------------------
@@ -1066,10 +1163,12 @@ function Start-Sender {
     $clock = [Diagnostics.Stopwatch]::StartNew()
     $remote = [Net.IPEndPoint]::new([Net.IPAddress]::Any, 0)
     $st = @{ enabled = [bool]$cfg.startEnabled; lastPong = $null; pc2Focused = $false; reachable = $false
-             flashUntil = [long]0; flashText = ''; flashColor = $null; pending = @{}; seq = [long]0 }
+             flashUntil = [long]0; flashText = ''; flashColor = $null; pending = @{}; seq = [long]0
+             settle = $null }   # settle: a "waitTarget" click waiting for the priest's target code ($relayClick)
     $toggleWasHeld = $false
     $lastPing = [long]-100000
     $maxDelay = ($Triggers.Values | ForEach-Object { $_.delayMs } | Measure-Object -Maximum).Maximum
+    if (@($Triggers.Values | Where-Object { $_.waitTarget }).Count) { $maxDelay = [math]::Max($maxDelay, [int]$cfg.targetWaitMs) }
     $cx = 0; $cy = 0
     $leftWasDown = $false
 
@@ -1084,13 +1183,28 @@ function Start-Sender {
         $st.flashText = $text; $st.flashColor = $color; $st.flashUntil = $clock.ElapsedMilliseconds + $ms
     }
     $relay = {
-        param($t)
+        param($t, [string]$arg = '', [string]$note = '')
+        if (-not $arg) { $arg = $t.name }
         $st.seq++
-        if (Send-Relay $udp $to (New-RelayMessage $st.seq 'CLICK' $t.name)) {
+        if (Send-Relay $udp $to (New-RelayMessage $st.seq 'CLICK' $arg)) {
             $st.pending["$($st.seq)"] = $now
-            Write-Log ("{0} -> PC 2 ({1})" -f $t.combo, $t.name) 'White'
+            Write-Log ("{0} -> PC 2 ({1}){2}" -f $t.combo, $t.name, $note) 'White'
             & $flash 'Relais -> PC 2...' ([Drawing.Color]::Gold) 3000
         }
+    }
+    # A click trigger: a "waitTarget" one is sent with the priest's target code, once the
+    # priest's game shows the target this click gave it (settle, Step-TargetSettle)
+    $relayClick = {
+        param($t)
+        $before = if ($null -ne $t.state.target) { [int]$t.state.target } else { -1 }
+        $t.state.target = $null
+        if (-not $t.waitTarget) { & $relay $t; return }
+        if ($before -lt 0) {
+            & $relay $t $t.name ' - no target code here (DuoBox option relayTarget): PC 2 waits its fixed delay'
+            return
+        }
+        if ($st.settle) { $s = $st.settle; & $relay $s.t ('{0}.{1}' -f $s.t.name, $s.before) }
+        $st.settle = @{ t = $t; before = $before; since = $now; until = $now + [int]$cfg.targetSettleMs }
     }
     $send = {
         param([string]$kind, [string]$arg, [int]$times = 1, [bool]$track = $false)
@@ -1134,6 +1248,9 @@ function Start-Sender {
         $(if ($st.enabled) { 'ON' } else { 'OFF' }), $toggleName) 'Green'
     foreach ($t in $Triggers.Values) { Write-Log ("  {0} -> PC 2 presses {1} ({2})" -f $t.combo, $t.keys, $t.label) 'Cyan' }
     Write-Log 'A press with these modifiers that is not relayed (relay ON) is listed with the reason.' 'DarkGray'
+    if (@($Triggers.Values | Where-Object { $_.waitTarget }).Count) {
+        Write-Log "Target wait: tick the DuoBox option 'Ctrl + clic : le guerrier attend...' (tab DuoRelay) on both characters." 'DarkGray'
+    }
     if ($PixelTriggers.Count) {
         Write-Log 'Icons: DuoBox spell panel (/duo panneau), WoW in windowed or windowed fullscreen mode.' 'DarkGray'
     }
@@ -1205,6 +1322,7 @@ function Start-Sender {
                 if ($down -and -not $t.state.wasDown -and $st.enabled -and (Test-Modifiers $t.mods)) {
                     $ok = Test-WowForeground
                     if (-not $ok) { Write-Log ("{0} not relayed: WoW is not the foreground window" -f $t.combo) 'DarkYellow' }
+                    elseif ($t.waitTarget) { $t.state.target = Get-TargetCode (Read-CornerCells) 1 } # the priest's target before this click
                 }
                 $fired = Step-Click $t.state $down $ok $cx $cy $now ([int]$cfg.maxClickMovePx) ([int]$cfg.maxClickMs) $t.drag
                 if ($panelClick -and $t.buttonVk -eq 0x01) {
@@ -1215,7 +1333,15 @@ function Start-Sender {
                     Write-Log ("{0} not relayed: {1}" -f $t.combo, $t.state.reason) 'DarkYellow'
                     $t.state.reason = $null
                 }
-                if ($fired) { & $relay $t }
+                if ($fired) { & $relayClick $t }
+            }
+            # A "waitTarget" click: sent with the target the priest's game shows after it
+            if ($st.settle) {
+                $code = Step-TargetSettle $st.settle (Get-TargetCode (Read-CornerCells) 1) $now
+                if ($code -ge 0) {
+                    $s = $st.settle; $st.settle = $null
+                    & $relay $s.t ('{0}.{1}' -f $s.t.name, $code) (" - priest's target code {0}, read {1} ms after the click" -f $code, ($now - $s.since))
+                }
             }
 
             # Warrior commands: what the keyboard hook took from the priest's game
@@ -1292,6 +1418,7 @@ function Start-Sender {
                         'held'       { Write-Log ("  PC 2 holds the key ({0} ms)" -f $ms) 'Green' }
                         'notfocused' { Write-Log '  PC 2: WoW is not the foreground window, nothing pressed' 'Red'; & $flash 'Relais : WoW pas actif sur PC 2' ([Drawing.Color]::Tomato) 2500 }
                         'busy'       { Write-Log '  PC 2: too soon after the previous click, ignored' 'Yellow'; & $flash 'Relais : trop rapide, ignore' ([Drawing.Color]::Orange) 1500 }
+                        'replaced'   { Write-Log ('  PC 2: nothing pressed, the next click came before the warrior saw this target ({0} ms)' -f $ms) 'Yellow' }
                         default      { Write-Log ("  PC 2: {0}" -f $m.arg) 'Red'; & $flash 'Relais : refuse par PC 2' ([Drawing.Color]::Tomato) 2500 }
                     }
                 }
@@ -1348,8 +1475,11 @@ function Start-Sender {
 }
 
 function New-ReceiverState {
+    # waiting: the press waiting for its target (Step-ReceiverWait); from: PC 1's address of the packet being handled;
+    # readTarget: the warrior's code for its partner's target on this screen (-1: none)
     return @{ triggers = $Triggers; moves = $Moves; clock = [Diagnostics.Stopwatch]::StartNew(); lastFired = $null
-              held = @{}; cam = $null; fg = $false; fgAt = $null }
+              held = @{}; cam = $null; fg = $false; fgAt = $null; waiting = $null; from = $null
+              readTarget = { Get-TargetCode (Read-CornerCells) 2 } }
 }
 
 function Start-Receiver {
@@ -1367,16 +1497,29 @@ function Start-Receiver {
     if (-not (Get-NetFirewallRule -DisplayName $RuleName -ErrorAction SilentlyContinue)) {
         Write-Log "No firewall rule '$RuleName': run Setup-Firewall-PC2.bat once, or PC 1's messages may be blocked." 'Yellow'
     }
-    foreach ($t in $Triggers.Values) { Write-Log ("  {0}: presses {1} after {2} ms ({3})" -f $t.name, $t.keys, $t.delayMs, $t.label) 'Cyan' }
+    foreach ($t in $Triggers.Values) {
+        $when = if ($t.waitTarget) { "once the warrior sees the priest's target, at most $($cfg.targetWaitMs) ms (without target codes: after $($t.delayMs) ms)" } else { "after $($t.delayMs) ms" }
+        Write-Log ("  {0}: presses {1} {2} ({3})" -f $t.name, $t.keys, $when, $t.label) 'Cyan'
+    }
     foreach ($mv in $Moves.Values) { Write-Log ("  {0}: holds {1} while PC 1 holds {2} ({3})" -f $mv.name, $mv.hold, $mv.key, $mv.label) 'Cyan' }
     if ($Camera) { Write-Log ("  camera: a mouse button held + PC 1's mouse movement while PC 1 holds {0}" -f $Camera.key) 'Cyan' }
     Write-Log 'Click the WoW window now: keys are only pressed while WoW is the foreground window. Ctrl+C to quit.' 'Cyan'
 
+    # A press waiting for its target: the warrior's screen read every 10 ms
+    $stepWait = {
+        $w = $state.waiting
+        if (-not $w) { return }
+        $reply = Step-ReceiverWait $state $state.clock.ElapsedMilliseconds ([int](& $state.readTarget))
+        if ($reply -and $w.to) { [void](Send-Relay $udp $w.to $reply) }
+    }
+
     try {
         while ($true) {
-            # 50 ms at most without a look at the held keys (Ctrl+C gets through too)
-            if (-not $udp.Client.Poll(50000, [Net.Sockets.SelectMode]::SelectRead)) {
+            # 50 ms at most without a look at the held keys (Ctrl+C gets through too), 10 ms while a press waits
+            $pollUs = if ($state.waiting) { 10000 } else { 50000 }
+            if (-not $udp.Client.Poll($pollUs, [Net.Sockets.SelectMode]::SelectRead)) {
                 Step-StreamSafety $state $state.clock.ElapsedMilliseconds
+                & $stepWait
                 continue
             }
             try { $bytes = $udp.Receive([ref]$remote) }
@@ -1392,9 +1535,12 @@ function Start-Receiver {
                 if (-not $refused.ContainsKey($who)) { Write-Log "Message from $who refused (not PC 1)." 'Yellow'; $refused[$who] = $true }
                 continue
             }
-            $reply = Invoke-RelayPacket ([Text.Encoding]::ASCII.GetString($bytes)) $state
-            if ($reply) { [void](Send-Relay $udp $remote $reply) }
+            $state.from = [Net.IPEndPoint]::new($remote.Address, $remote.Port)
+            foreach ($reply in @(Invoke-RelayPacket ([Text.Encoding]::ASCII.GetString($bytes)) $state)) {
+                if ($reply) { [void](Send-Relay $udp $remote $reply) }
+            }
             if ($udp.Available -eq 0) { Step-StreamSafety $state $state.clock.ElapsedMilliseconds } # after the queue
+            & $stepWait
         }
     }
     finally {
@@ -1408,20 +1554,26 @@ function Start-Receiver {
 function Start-PixelProbe {
     [RelayInput]::DpiAware()
     Disable-QuickEdit
-    Write-Log 'Pixel probe: put the mouse over an icon of the DuoBox panel in WoW (windowed or windowed fullscreen). Ctrl+C to quit.' 'Green'
+    Write-Log 'Pixel probe: put the mouse over an icon of the DuoBox panel in WoW, or change target (target codes), windowed or windowed fullscreen. Ctrl+C to quit.' 'Green'
     $last = $null
     while ($true) {
         $line = if (Test-WowForeground) {
-            $rgb = Read-PanelCells
+            $all = Read-CornerCells
+            $rgb = if ($null -ne $all) { @($all[0..3]) } else { $null }
             $code = ConvertFrom-PixelCells $rgb
             $status = ConvertFrom-StatusCells $rgb
             $what = if ($code) {
                 $t = $PixelTriggers[$code]
                 if ($t) { "icon $code -> trigger $($t.name), PC 2 would press $($t.keys)" } else { "icon $code, no trigger with ""pixel"": $code" }
             } elseif ($status) { "status $status -> warrior commands: $(Format-Status $status)" } else { 'no code' }
-            '{0}  ({1})' -f $what, (Format-Cells $rgb)
+            # Target codes (DuoBox option relayTarget): this character's target, its partner's
+            $own = Get-TargetCode $all 1; $assist = Get-TargetCode $all 2
+            $targets = if ($own -ge 0 -or $assist -ge 0) {
+                "targets: mine {0}, partner's {1}" -f $(if ($own -ge 0) { $own } else { '-' }), $(if ($assist -ge 0) { $assist } else { '-' })
+            } else { 'no target code' }
+            '{0}; {1}  ({2})' -f $what, $targets, (Format-Cells $all)
         } else { 'WoW is not the foreground window' }
-        if ($line -ne $last) { Write-Log $line $(if ($line -like 'icon*' -or $line -like 'status*') { 'White' } else { 'DarkGray' }); $last = $line }
+        if ($line -ne $last) { Write-Log $line $(if ($line -like 'icon*' -or $line -like 'status*' -or $line -like '*targets:*') { 'White' } else { 'DarkGray' }); $last = $line }
         Start-Sleep -Milliseconds 200
     }
 }
@@ -1598,6 +1750,24 @@ function Invoke-SelfTest {
     Check ($crossed.Count -eq 0) 'status and icon codes never read as each other'
     Check ((ConvertFrom-StatusCells @(0x000000, 0xFFFFFF, 0x000000, 0xFFFFFF)) -eq 0) 'status code refused: black and white'
     Check ((ConvertFrom-StatusCells (ConvertTo-Cells @(0, 7, 6, 1))) -eq 0) 'status code refused: S = 6'
+
+    # Target codes (DuoBox option relayTarget), squares 5-8 and 9-12; tests/test_relay_panel.py draws V = 20 the same way
+    $targetTrip = @(0..63 | Where-Object { (ConvertFrom-TargetCells (ConvertTo-TargetCells $_)) -ne $_ })
+    Check ($targetTrip.Count -eq 0) ("target code: 0-63 read back ({0} wrong)" -f $targetTrip.Count)
+    Check ((ConvertFrom-TargetCells @(0x00FF00, 0xFF00FF, 0xFF0000, 0x00FFFF)) -eq 20) 'target code: green, magenta, red, cyan = 20'
+    Check ((ConvertFrom-TargetCells @(0x000000, 0x000000, 0x000000, 0x000000)) -eq -1) 'target code refused: 4 black squares (unknown target)'
+    Check ((ConvertFrom-TargetCells @(0x00FF00, 0xFF00FF, 0xFF0000, 0xFF0000)) -eq -1) 'target code refused: a square not the complement'
+    Check ((ConvertFrom-TargetCells $null) -eq -1) 'target code refused: screen unreadable'
+    $corner = [int[]]((ConvertTo-StatusCells 1) + (ConvertTo-TargetCells 0) + (ConvertTo-TargetCells 42))
+    Check ((Get-TargetCode $corner 1) -eq 0 -and (Get-TargetCode $corner 2) -eq 42) "corner: own target 0 (none), partner's 42"
+    Check ((Get-TargetCode ([int[]]$corner[0..7]) 2) -eq -1 -and (Get-TargetCode $null 1) -eq -1) 'corner: fewer than 12 squares -> no code'
+    # PC 1: the priest's code sent after a click (read 'before' at the button down)
+    $w = @{ before = 7; until = 1150 }
+    Check ((Step-TargetSettle $w 7 1000) -eq -2 -and (Step-TargetSettle $w -1 1000) -eq -2) 'settle: same code or unreadable -> wait'
+    Check ((Step-TargetSettle $w 9 1010) -eq 9) 'settle: a new code -> sent at once'
+    Check ((Step-TargetSettle $w 0 1010) -eq 0) 'settle: no target any more -> sent at once'
+    Check ((Step-TargetSettle $w 7 1150) -eq 7) 'settle: unchanged at the deadline -> the same target (clicked again)'
+    Check ((Step-TargetSettle $w -1 1150) -eq 7) 'settle: unreadable at the deadline -> the code before the click'
     $p = Get-StatusParts 5; Check ($p.moves -and $p.camera -and $p.button -eq 'R') 'status 5 = moves + camera, right button (the warrior turns)'
     $p = Get-StatusParts 1; Check (-not $p.moves -and $p.camera -and $p.button -eq 'L') 'status 1 = camera only, left button'
     $p = Get-StatusParts 3; Check ($p.moves -and -not $p.camera) 'status 3 = moves only'
@@ -1702,6 +1872,8 @@ function Invoke-SelfTest {
     # Messages
     $m = ConvertFrom-RelayMessage (New-RelayMessage 42 'CLICK' 'interact')
     Check ($m -and $m.seq -eq 42 -and $m.kind -eq 'CLICK' -and $m.arg -eq 'interact') 'message round trip'
+    $m = ConvertFrom-RelayMessage (New-RelayMessage 43 'CLICK' 'interact.42')
+    Check ($m -and $m.arg -eq 'interact.42') 'message with the priest''s target code'
     foreach ($bad in 'hello', "$Proto|x|CLICK|a", "$Proto|1|CLICK|a b", "$Proto|1|click|a", "$Proto|1|CLICK") {
         Check ($null -eq (ConvertFrom-RelayMessage $bad)) "refused: '$bad'"
     }
@@ -1716,6 +1888,55 @@ function Invoke-SelfTest {
     $own = ConvertTo-Trigger ([pscustomobject]@{ name = 'a'; button = 'RIGHT'; modifier = 'CTRL'; keys = 'T'; delayMs = 500 })
     $inherit = ConvertTo-Trigger ([pscustomobject]@{ name = 'b'; button = 'LEFT'; modifier = 'CTRL'; keys = 'T' })
     Check ($own.delayMs -eq 500 -and $inherit.delayMs -eq [int]$cfg.delayMs) 'trigger delay: its own, else the global one'
+    $wt = ConvertTo-Trigger ([pscustomobject]@{ name = 'w'; button = 'LEFT'; modifier = 'CTRL'; keys = 'SHIFT-T, T'; waitTarget = $true })
+    Check ($wt.waitTarget -and -not $inherit.waitTarget) 'trigger waitTarget: read from the config, off by default'
+    Check ($Triggers['interact'] -and $Triggers['interact'].waitTarget) 'DuoRelay.json: interact waits for the target'
+
+    # PC 2: a "waitTarget" click waits for the warrior's code (a fake screen), dry run
+    $script:DryRun = $true; $script:NoDelay = $true; $script:ForegroundOverride = $true
+    try {
+        $rs = New-ReceiverState
+        $rs.triggers = @{ w = $wt }
+        $script:FakeTarget = 5
+        $rs.readTarget = { $script:FakeTarget }
+        $click = { param([long]$seq, [string]$arg) Invoke-RelayPacket (New-RelayMessage $seq 'CLICK' $arg) $rs }
+        $r = @(& $click 1 'w.5')
+        Check ($r.Count -eq 1 -and $r[0] -like '*|1|ACK|sent' -and -not $rs.waiting) 'target already seen on PC 2 -> pressed at once'
+        $rs.lastFired = $null
+        $r = @(& $click 2 'w.9')
+        Check ($r.Count -eq 0 -and $rs.waiting -and $rs.waiting.want -eq 9) 'target not seen yet -> waits'
+        $t0 = $rs.waiting.since
+        Check ($null -eq (Step-ReceiverWait $rs ($t0 + 100) 5) -and $rs.waiting) 'still the old target -> still waiting'
+        $ack = Step-ReceiverWait $rs ($t0 + 250) 9
+        Check ($ack -like '*|2|ACK|sent' -and -not $rs.waiting) 'target seen -> pressed'
+        $rs.lastFired = $null
+        [void](& $click 3 'w.9')
+        $ack = Step-ReceiverWait $rs ($rs.waiting.since + [int]$cfg.targetWaitMs) 5
+        Check ($ack -like '*|3|ACK|sent' -and -not $rs.waiting) 'target never seen -> pressed anyway at targetWaitMs'
+        $rs.lastFired = $null
+        [void](& $click 4 'w.9')
+        $r = @(& $click 5 'w.11')
+        Check ($r.Count -eq 1 -and $r[0] -like '*|5|ACK|busy' -and $rs.waiting.want -eq 9) 'next click within minIntervalMs -> busy, the wait goes on'
+        $rs.lastFired = $null
+        $r = @(& $click 6 'w.11')
+        Check ($r.Count -eq 1 -and $r[0] -like '*|4|ACK|replaced' -and $rs.waiting.want -eq 11 -and $rs.waiting.seq -eq 6) 'next click while waiting -> the old one dropped'
+        $rs.waiting = $null; $rs.lastFired = $null
+        $script:FakeTarget = -1
+        $r = @(& $click 7 'w.9')
+        Check ($r.Count -eq 1 -and $r[0] -like '*|7|ACK|sent' -and -not $rs.waiting) 'no target code on PC 2 -> fixed delay'
+        $rs.lastFired = $null
+        $r = @(& $click 8 'w')
+        Check ($r.Count -eq 1 -and $r[0] -like '*|8|ACK|sent') 'no target code from PC 1 -> fixed delay'
+        $rs.lastFired = $null; $script:FakeTarget = 3
+        [void](& $click 9 'w.9')
+        $script:ForegroundOverride = $false
+        $ack = Step-ReceiverWait $rs ($rs.waiting.since + 50) 9
+        Check ($ack -like '*|9|ACK|notfocused' -and -not $rs.waiting) 'WoW left the foreground while waiting -> nothing pressed'
+    } catch {
+        Check $false ("target wait: {0}" -f $_.Exception.Message)
+    } finally {
+        $script:DryRun = $false; $script:NoDelay = $false; $script:ForegroundOverride = $null
+    }
 
     # Loopback: PC 1 socket -> PC 2 socket -> reply, no key pressed, no wait
     $script:DryRun = $true

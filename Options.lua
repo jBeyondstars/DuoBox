@@ -451,42 +451,48 @@ Toggle(relay, 0, -18, "pickupRelay", "Ramassage relaye (Ctrl + clic droit)",
 	.. "Sinon il ne fait rien et ton ecran dit ce qu'il vise. Meme type d'objet, pas forcement le meme exemplaire. "
 	.. "Hors combat seulement. Utilise la touche Ctrl+Maj+F9 chez le partenaire (GUIDE.md, section 7).")
 	:HookScript("OnClick", function() if ns.RefreshPickupRelay then ns.RefreshPickupRelay() end end)
-Toggle(relay, 0, -42, "relayPanel", "Panneau des sorts du guerrier",
+Toggle(relay, 0, -42, "relayTarget", "Ctrl + clic : le guerrier attend la nouvelle cible du pretre",
+	"Desactive par defaut, a activer sur les deux persos, avec DuoRelay lance. DuoBox dessine 8 petits carres en haut "
+	.. "a gauche de l'ecran : la cible de ce perso et celle de son partenaire. Apres un Ctrl + clic gauche, DuoRelay "
+	.. "n'appuie sur Maj+T, T chez le guerrier qu'une fois que son jeu a recu la nouvelle cible du pretre (elle passe "
+	.. "par le serveur : 0,1 a 0,4 s apres le clic), 1 s au plus. Sans les carres (option decochee, mode donjon) : "
+	.. "delai fixe de DuoRelay.json (delayMs). GUIDE.md, section 7.")
+Toggle(relay, 0, -66, "relayPanel", "Panneau des sorts du guerrier",
 	"Sur le pretre, desactive par defaut, avec DuoRelay lance sur les deux PC. Un clic sur une icone fait lancer "
 	.. "le sort au guerrier : DuoRelay presse sa touche de barre sur le PC 2 (rien ne se passe dans ce jeu). "
 	.. "Icone N = declencheur \"pixel\": N de DuoRelay.json. Fenetre ou plein ecran fenetre. "
 	.. "Recharges estimees sur les icones (le jeu les cache en combat) : meme version de DuoBox sur le guerrier. "
 	.. "/duo panneau sorts <liste> : changer les icones (GUIDE.md, section 7).")
-Slider(relay, 0, -66, "relayPanelPerRow", "Icones par rangee (panneau guerrier)", 1, ns.RELAY_PANEL_MAX or 12, 1, "%d",
+Slider(relay, 0, -90, "relayPanelPerRow", "Icones par rangee (panneau guerrier)", 1, ns.RELAY_PANEL_MAX or 12, 1, "%d",
 	"Nombre d'icones sur chaque rangee du panneau des sorts du guerrier : 4 avec 8 sorts = 2 rangees de 4. "
 	.. "12 = une seule rangee.")
-Toggle(relay, 0, -112, "relayPanelTooltip", "Infobulles des sorts (panneau guerrier)",
+Toggle(relay, 0, -136, "relayPanelTooltip", "Infobulles des sorts (panneau guerrier)",
 	"Decoche : survoler une icone du panneau n'affiche plus l'infobulle du sort. Le clic fonctionne pareil.")
 
-Header(relay, 0, -146, "Commandes du guerrier depuis le pretre (le pretre ne les recoit jamais)")
-Toggle(relay, 0, -164, "relayCamera", "Camera du guerrier : Ctrl+Z maintenu et la souris",
+Header(relay, 0, -170, "Commandes du guerrier depuis le pretre (le pretre ne les recoit jamais)")
+Toggle(relay, 0, -188, "relayCamera", "Camera du guerrier : Ctrl+Z maintenu et la souris",
 	"Sur le pretre, desactive par defaut, avec DuoRelay lance sur les deux PC et le relais ON. Maintenir Ctrl+Z et "
 	.. "bouger la souris : la camera du guerrier tourne sur le PC 2 comme avec sa propre souris, le curseur du pretre "
 	.. "reste immobile. Ctrl+Z n'arrive jamais au jeu du pretre. Un clic de souris pendant ce temps rend la souris au "
 	.. "pretre (la camera du guerrier s'arrete). Ne demarre pas si un bouton de la souris est deja enfonce.")
-Toggle(relay, 22, -188, "relayCameraTurn", "Le guerrier tourne avec (clic droit chez lui ; decoche : clic gauche, camera seule)",
+Toggle(relay, 22, -212, "relayCameraTurn", "Le guerrier tourne avec (clic droit chez lui ; decoche : clic gauche, camera seule)",
 	"Coche : DuoRelay maintient le clic droit chez le guerrier, il tourne avec sa camera (comme un clic droit glisse). "
 	.. "Decoche : le clic gauche, seule la camera tourne.")
-Toggle(relay, 0, -212, "relayMoves", "Deplacements du guerrier : Ctrl+Q / Ctrl+D pas chasses, Ctrl+S reculer",
+Toggle(relay, 0, -236, "relayMoves", "Deplacements du guerrier : Ctrl+Q / Ctrl+D pas chasses, Ctrl+S reculer",
 	"Sur le pretre, desactive par defaut, avec DuoRelay lance sur les deux PC et le relais ON. Tant que Ctrl+Q est "
 	.. "enfonce, le guerrier fait un pas chasse a gauche (Ctrl+D : a droite, Ctrl+S : il recule). Le pretre ne recoit "
 	.. "jamais ces touches. Chez le guerrier : Q = Deplacement lateral gauche, S = Reculer, et la fleche droite a lier a "
 	.. "Deplacement lateral droit. Touches modifiables dans DuoRelay.json (moves).")
-Note(relay, 0, -240, 560):SetText("|cff999999Coche, DuoBox dessine 4 petits carres en haut a gauche de l'ecran : "
+Note(relay, 0, -264, 560):SetText("|cff999999Coche, DuoBox dessine 4 petits carres en haut a gauche de l'ecran : "
 	.. "DuoRelay ne prend Ctrl+Z, Ctrl+Q, Ctrl+S et Ctrl+D au jeu du pretre que pendant qu'il les voit (relais ON, WoW au "
 	.. "premier plan, fenetre ou plein ecran fenetre). Ctrl reste enfonce chez le pretre : ses macros Ctrl = soi-meme. "
 	.. "GUIDE.md, section 7.|r")
 
 -- One box per icon of the warrior's spell panel (/duo panneau sorts), 3 per row in panel order
-Header(relay, 0, -300, "Icones du panneau des sorts du guerrier (decoche = masquee)")
+Header(relay, 0, -324, "Icones du panneau des sorts du guerrier (decoche = masquee)")
 local relayBoxes = {}
 for i = 1, ns.RELAY_PANEL_MAX or 12 do
-	local cb = CheckBox(relay, ((i - 1) % 3) * 165, -318 - math.floor((i - 1) / 3) * 20, "")
+	local cb = CheckBox(relay, ((i - 1) % 3) * 165, -342 - math.floor((i - 1) / 3) * 20, "")
 	cb:SetSize(20, 20)
 	cb.label:SetFontObject("GameFontHighlightSmall")
 	cb:SetScript("OnClick", function(self) ns.SetRelayPanelHidden(self.entry, not self:GetChecked()) end)

@@ -64,6 +64,7 @@ local defaults = {
 	relayCamera = false,     -- DuoRelay, priest: Ctrl+Z held + mouse = the warrior's camera, never the priest's (RelayPanel.lua status code)
 	relayCameraTurn = false, -- with it: PC 2 holds the right button (the warrior turns too), else the left one (camera only)
 	relayMoves = false,      -- DuoRelay, priest: Ctrl+Q / Ctrl+S / Ctrl+D held = the warrior strafes / backs up, never the priest
+	relayTarget = false,     -- DuoRelay, both: target codes in the corner, PC 2 presses Shift+T once the warrior sees the priest's target (RelayPanel.lua)
 }
 
 local DB
@@ -2371,7 +2372,7 @@ local function Set(key, value)
 	if key == "journal" and ns.RefreshJournal then ns.RefreshJournal() end
 	if (key == "facingCone" or key == "coneHeight") and ns.RefreshCone then ns.RefreshCone(key) end
 	if (key == "relayPanel" or key == "relayPanelSpells" or key == "relayPanelPerRow" or key == "relayPanelHidden") and ns.RefreshRelayPanel then ns.RefreshRelayPanel() end
-	if (key == "relayCamera" or key == "relayCameraTurn" or key == "relayMoves") and ns.RefreshRelayStatus then ns.RefreshRelayStatus() end
+	if (key == "relayCamera" or key == "relayCameraTurn" or key == "relayMoves" or key == "relayTarget") and ns.RefreshRelayStatus then ns.RefreshRelayStatus() end
 	if key == "rotation" and ns.RotationChanged then ns.RotationChanged() end -- loaded by a profile
 	if (key == "tracking" or key == "partner") and ns.RefreshTracking then
 		ns.RefreshTracking()

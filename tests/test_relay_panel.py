@@ -37,7 +37,7 @@ function ns.Print(msg) table.insert(printed, msg) end
 function ns.Set(key, value)
     db[key] = value
     if ns.RefreshRelayPanel then ns.RefreshRelayPanel() end
-    if (key == "relayCamera" or key == "relayCameraTurn" or key == "relayMoves") and ns.RefreshRelayStatus then ns.RefreshRelayStatus() end
+    if (key == "relayCamera" or key == "relayCameraTurn" or key == "relayMoves" or key == "relayTarget") and ns.RefreshRelayStatus then ns.RefreshRelayStatus() end
 end
 function ns.SpellNameIcon(id) local s = SPELLS[id]; if s then return s[1], s[2] end end
 function GetPhysicalScreenSize() return physical[1], physical[2] end
@@ -74,6 +74,7 @@ end
 -- Party units: power type (0 mana, 1 rage), power and its maximum
 units = {party1 = {exists = true, ptype = 1, power = 45, max = 100}}
 function UnitExists(u) return units[u] ~= nil and units[u].exists end
+function UnitGUID(u) return units[u] and units[u].guid end
 function UnitPowerType(u) return units[u] and units[u].ptype end
 function UnitPower(u) return units[u] and units[u].power end
 function UnitPowerMax(u) return units[u] and units[u].max end
@@ -197,6 +198,23 @@ function last() return printed[#printed] end
 function bits()
     local list = {}
     for _, t in ipairs(squares()) do list[#list + 1] = ("%d%d%d"):format(t.color[1], t.color[2], t.color[3]) end
+    return table.concat(list, " ")
+end
+-- Target codes (option relayTarget): the 8 squares as "rgb" bits, redrawn as on a game frame
+function targetBits()
+    if DuoBoxRelayTarget.shown then DuoBoxRelayTarget.scripts.OnUpdate(DuoBoxRelayTarget, 0.01) end
+    local list = {}
+    for _, t in ipairs(textures) do
+        if t.parent == DuoBoxRelayTarget then list[#list + 1] = ("%d%d%d"):format(t.color[1], t.color[2], t.color[3]) end
+    end
+    return table.concat(list, " ")
+end
+-- The 4 squares of a code value V, as "rgb" bits
+function codeBits(v)
+    local list = {}
+    for _, x in ipairs(ns.RelayTargetCode(v)) do
+        list[#list + 1] = ("%d%d%d"):format(math.floor(x / 4) % 2, math.floor(x / 2) % 2, x % 2)
+    end
     return table.concat(list, " ")
 end
 function fire(event) for _, f in ipairs(frames) do
@@ -449,6 +467,76 @@ class RelayPanelTest(unittest.TestCase):
         self.assertAlmostEqual(self.lua.eval("squares()[1].w"), 8 * 768 / 1080 / 0.5)
         self.lua.execute('physical = {2560, 1440}; fire("DISPLAY_SIZE_CHANGED")')
         self.assertAlmostEqual(self.lua.eval("squares()[1].w"), 8 * 768 / 1440 / 0.5)
+
+    def test_target_code_values(self):
+        # V = A * 8 + B drawn A, 7-A, B, 7-B; 0 = no target; nil = unknown, 4 black squares.
+        # V = 20 is DuoRelay.ps1 -SelfTest's vector (green, magenta, red, cyan).
+        self.load('''
+            units.target = {exists = true, guid = "Creature-0-6858-0-24-202-4B44D974A0"}
+            units.party1target = {exists = true, guid = "Creature-0-6858-0-24-531-E7FC564E22"}
+        ''')
+        self.run_lua('''
+            assert(codeBits(20) == "010 101 100 011", codeBits(20))
+            assert(codeBits(0) == "000 111 000 111", codeBits(0))
+            assert(codeBits(63) == "111 000 111 000", codeBits(63))
+            assert(codeBits(nil) == "000 000 000 000")
+            local a, b = ns.RelayTargetValue("target"), ns.RelayTargetValue("party1target")
+            assert(a >= 1 and a <= 63 and b >= 1 and b <= 63 and a ~= b, tostring(a) .. " " .. tostring(b))
+            assert(ns.RelayTargetValue("target") == a)                    -- the same GUID, the same code
+            units.party2target = {exists = true, guid = units.target.guid}
+            assert(ns.RelayTargetValue("party2target") == a)              -- on any unit (the priest's and the warrior's clients agree)
+            assert(ns.RelayTargetValue("focus") == 0)                     -- no unit: 0
+            units.target.guid = SECRET
+            assert(ns.RelayTargetValue("target") == nil)                  -- hidden GUID: unknown
+            units.target = {exists = SECRET}
+            assert(ns.RelayTargetValue("target") == nil)                  -- hidden existence: unknown
+        ''')
+
+    def test_target_codes_follow_the_targets(self):
+        # Squares 5-8: this character's target; 9-12: the target its assists take, when it is the partner's
+        self.load('''
+            units.target = {exists = true, guid = "Creature-0-6858-0-24-202-4B44D974A0"}
+            units.party1target = {exists = true, guid = "Creature-0-6858-0-24-531-E7FC564E22"}
+            assistUnit = "party1"
+            function ns.AssistUnit() return assistUnit end
+        ''')
+        self.run_lua('''
+            local t = DuoBoxRelayTarget
+            assert(not t.shown)                                           -- option off: nothing drawn
+            ns.Set("relayTarget", true)
+            assert(t.shown and t.parent == UIParent and t.point[1] == "TOPLEFT" and t.point[2] == UIParent)
+            local size = 8 * 768 / 1080
+            assert(math.abs(t.point[4] - 4 * size) < 1e-9 and t.point[5] == 0, t.point[4])  -- after the panel code's 4 squares
+            assert(math.abs(t.w - 8 * size) < 1e-9 and math.abs(t.h - size) < 1e-9)
+            local own, theirs = ns.RelayTargetValue("target"), ns.RelayTargetValue("party1target")
+            assert(targetBits() == codeBits(own) .. " " .. codeBits(theirs), targetBits())
+
+            -- The priest's new target arrives from the server: redrawn on the next frame
+            units.party1target.guid = units.target.guid
+            assert(targetBits() == codeBits(own) .. " " .. codeBits(own), targetBits())
+            units.party1target = nil                                      -- the partner has no target
+            assert(targetBits() == codeBits(own) .. " " .. codeBits(0), targetBits())
+            units.target = nil
+            assert(targetBits() == codeBits(0) .. " " .. codeBits(0), targetBits())
+
+            -- Dungeon mode: the assists take the tank's target, not the partner's: unknown
+            units.party1target = {exists = true, guid = "Creature-0-6858-0-24-531-E7FC564E22"}
+            assistUnit = "party2"
+            assert(targetBits() == codeBits(0) .. " 000 000 000 000", targetBits())
+            assistUnit = "party1"; partner = nil                          -- no partner in the group
+            assert(targetBits() == codeBits(0) .. " 000 000 000 000", targetBits())
+            partner = "party1"
+
+            ns.Set("relayTarget", false); assert(not t.shown)
+            ns.Set("relayMoves", true); assert(not t.shown and signal().shown) -- the status code alone
+        ''')
+
+    def test_target_code_size_follows_the_ui_scale(self):
+        self.load('db.relayTarget = true')
+        self.assertTrue(self.lua.eval('DuoBoxRelayTarget.shown'))
+        self.lua.execute('uiScale = 0.5; fire("UI_SCALE_CHANGED")')
+        self.assertAlmostEqual(self.lua.eval('DuoBoxRelayTarget.point[4]'), 4 * 8 * 768 / 1080 / 0.5)
+        self.assertAlmostEqual(self.lua.eval('DuoBoxRelayTarget.h'), 8 * 768 / 1080 / 0.5)
 
     def test_command_sets_the_spells_by_name_or_id(self):
         self.load()

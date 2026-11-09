@@ -19,6 +19,7 @@
 -- and DB.relayMoves (tab DuoRelay, off by default). DuoRelay reads it every
 -- 0.25 s and only takes Ctrl+Z / Ctrl+Q / Ctrl+S / Ctrl+D from this game while
 -- it says so (ConvertFrom-StatusCells).
+-- Target codes, squares 5 to 12 (option DB.relayTarget): see "Target codes" below.
 -- Option DB.relayPanel (off by default); the spells, DB.relayPanelSpells, are
 -- only shown here (icon, tooltip): their order is the "pixel" number of the
 -- DuoRelay.json triggers. DB.relayPanelHidden: entries of that list whose icon
@@ -178,17 +179,19 @@ local function PixelsPerUnit()
 	return PhysicalHeight() / 768 * signal:GetEffectiveScale()
 end
 
+-- Square i of a row of squares of this size (UI units), value v (0-7)
+local function Square(sq, i, size, v)
+	sq:ClearAllPoints()
+	sq:SetSize(size, size)
+	sq:SetPoint("TOPLEFT", (i - 1) * size, 0)
+	sq:SetColorTexture(math.floor(v / 4) % 2, math.floor(v / 2) % 2, v % 2, 1)
+end
+
 -- Draws the 4 squares with these values (0-7)
 local function Draw(values)
 	local size = CELL / PixelsPerUnit()
 	signal:SetSize(size * CELLS, size)
-	for i, v in ipairs(values) do
-		local sq = squares[i]
-		sq:ClearAllPoints()
-		sq:SetSize(size, size)
-		sq:SetPoint("TOPLEFT", (i - 1) * size, 0)
-		sq:SetColorTexture(math.floor(v / 4) % 2, math.floor(v / 2) % 2, v % 2, 1)
-	end
+	for i, v in ipairs(values) do Square(squares[i], i, size, v) end
 	signal:Show()
 end
 
@@ -217,9 +220,91 @@ signal:SetScript("OnUpdate", function()
 	end
 end)
 
--- Options changed (DuoBox.lua Set), screen or UI scale changed: redraws the status code
+--------------------------------------------------------------------------------
+-- Target codes for DuoRelay (option DB.relayTarget, off by default, to turn on
+-- for both characters): squares 5-8 of the same row = this character's target,
+-- squares 9-12 = the target its assists take (the partner's, as this client
+-- sees it). After a Ctrl+click DuoRelay sends the priest's own code to PC 2,
+-- which waits until the warrior's squares 9-12 show it before it presses
+-- Shift+T, T. The priest's new target reaches the warrior's client through the
+-- server, 0.1 to 0.4 s after the click (warrior journal, 2026-11-09: 183 of
+-- 481 presses came before it with a fixed 150 ms wait).
+-- Value V: 0 = no target, 1-63 = a hash of the GUID (two targets share a code
+-- 1 time in 63: DuoRelay then presses at once, as before). Drawn A, 7-A, B, 7-B
+-- with A = floor(V / 8), B = V % 8, colours as above. Four black squares =
+-- unknown (hidden GUID; assists on the tank in dungeon mode): DuoRelay then
+-- waits its fixed delayMs. DuoRelay.ps1 reads them (ConvertFrom-TargetCells).
+--------------------------------------------------------------------------------
+
+local TARGET_CELLS = 8
+
+-- V of a unit's target code, nil = unknown
+local function TargetValue(unit)
+	local exists = UnitExists(unit)
+	if issecretvalue and issecretvalue(exists) then return nil end
+	if not exists then return 0 end
+	local guid = Val(UnitGUID(unit))
+	if type(guid) ~= "string" or guid == "" then return nil end
+	local h = 0
+	for i = 1, #guid do h = (h * 31 + guid:byte(i)) % 65521 end
+	return h % 63 + 1
+end
+ns.RelayTargetValue = TargetValue
+
+-- The 4 values (0-7) drawn for V; nil = 4 black squares
+local function TargetCode(v)
+	if not v then return { 0, 0, 0, 0 } end
+	local a, b = math.floor(v / 8), v % 8
+	return { a, 7 - a, b, 7 - b }
+end
+ns.RelayTargetCode = TargetCode
+
+-- The assists' target, only when they take the partner's (the one whose clicks DuoRelay relays)
+local function AssistTargetValue()
+	local assist = ns.AssistUnit and ns.AssistUnit()
+	if not assist or assist ~= (ns.PartnerUnit and ns.PartnerUnit()) then return nil end
+	return TargetValue(assist .. "target")
+end
+
+local targetSignal = CreateFrame("Frame", "DuoBoxRelayTarget", UIParent)
+targetSignal:SetFrameStrata("TOOLTIP")
+targetSignal:SetFrameLevel(9000)
+targetSignal:Hide()
+local targetSquares = {}
+for i = 1, TARGET_CELLS do
+	targetSquares[i] = targetSignal:CreateTexture(nil, "OVERLAY")
+end
+local drawnOwn, drawnAssist = false, false -- false: nothing drawn yet
+
+local function DrawTargets(force)
+	local own, assist = TargetValue("target"), AssistTargetValue()
+	if not force and own == drawnOwn and assist == drawnAssist then return end
+	drawnOwn, drawnAssist = own, assist
+	local size = CELL / PixelsPerUnit()
+	targetSignal:ClearAllPoints()
+	targetSignal:SetPoint("TOPLEFT", UIParent, "TOPLEFT", size * CELLS, 0)
+	targetSignal:SetSize(size * TARGET_CELLS, size)
+	local values = TargetCode(own)
+	for _, v in ipairs(TargetCode(assist)) do values[#values + 1] = v end
+	for i, v in ipairs(values) do Square(targetSquares[i], i, size, v) end
+end
+-- Every frame: a new target, a death, the partner's target arriving from the server
+targetSignal:SetScript("OnUpdate", function() DrawTargets(false) end)
+
+local function RefreshTargets()
+	local db = DB()
+	if db and db.relayTarget then
+		targetSignal:Show()
+		DrawTargets(true)
+	else
+		targetSignal:Hide()
+	end
+end
+
+-- Options changed (DuoBox.lua Set), screen or UI scale changed: redraws the status and target codes
 function ns.RefreshRelayStatus()
 	if not lit and testUntil == 0 then Off() end
+	RefreshTargets()
 end
 
 --------------------------------------------------------------------------------
