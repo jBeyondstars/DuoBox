@@ -457,6 +457,7 @@ The attacks stop following and start the melee auto-attack.
 | D-Clap / D-Hamstring | Thunder Clap / Hamstring |
 | D-Overpower / D-Execute | Overpower / Execute (only when the game allows them) |
 | D-Taunt | Defensive Stance if needed (1st press), then Taunt |
+| D-Whirlwind | Berserker Stance if needed (1st press), then Whirlwind; no target needed. Put it on button 2 of the Battle Stance page and of the Berserker Stance page: the panel's icon 13 presses `2`. The charge macros stay in Battle Stance, for Sweeping Strikes (Battle Stance only) before it |
 | D-Kick | same as the Kick button: Shield Bash with a shield, Pummel without one or in Berserker Stance |
 | D-Invite | invite the priest |
 
@@ -739,11 +740,11 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
   (the click works the same).
 - Default icons: **1** Victory Rush, **2** Slam, **3** Execute, **4** Thunder Clap, **5** Overpower,
   **6** Heroic Strike, **7** Cleave, **8** Hamstring, **9** Intimidating Shout, **10** Interagir (the warrior's
-  interact key, T: not a spell, so no cooldown and no blink), **11** Challenging Shout, **12** Sweeping Strikes
-  (12 icons: the panel is full). After a DuoBox update that adds icons, `/duo panneau defaut` on the priest takes
+  interact key, T: not a spell, so no cooldown and no blink), **11** Challenging Shout, **12** Sweeping Strikes,
+  **13** Whirlwind, **14** Intercept (15 icons at most). After a DuoBox update that adds icons, `/duo panneau defaut` on the priest takes
   the new list (the saved list is kept otherwise).
   `/duo panneau sorts Victory Rush, Slam, 5308, interact` replaces them (English names of the usual warrior spells,
-  spell IDs, or `interact`; 12 at most), `/duo panneau sorts` lists them with their numbers, `/duo panneau defaut`
+  spell IDs, or `interact`; 15 at most), `/duo panneau sorts` lists them with their numbers, `/duo panneau defaut`
   restores them.
 - **Show or hide icons**: at the bottom of the **DuoRelay** tab, "Icones du panneau des sorts du guerrier" has one box
   per icon of the list. Unticked, the icon leaves the panel and the others close the gap, but every icon keeps its
@@ -777,7 +778,7 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
   the picture, and the clicks on the icons do nothing.
 - The icon number is the `"pixel"` of a trigger in `DuoRelay.json`, which holds the key PC 2 presses: keep both
   lists in the same order. Default triggers, read from the warrior's key bindings and combat journal (Execute and
-  Intimidating Shout: their bar slot told by the user; Challenging Shout and Sweeping Strikes: their key told by the user) on 2026-11-07 and 2026-11-08:
+  Intimidating Shout: their bar slot told by the user; Challenging Shout, Sweeping Strikes, Whirlwind and Intercept: their key told by the user) on 2026-11-07, 2026-11-08 and 2026-11-10:
 
 | Icon | Spell | Key on PC 2 | Action bar slot |
 |---|---|---|---|
@@ -793,6 +794,8 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
 | 10 | Interagir | `T` | none: the interact key (INTERACTTARGET), what it takes on the warrior (NPC, object, or its enemy target) |
 | 11 | Challenging Shout | `Shift+3` | Action Bar 6, button 3 (MULTIACTIONBAR5BUTTON3 in the saved bindings of 2026-11-07) |
 | 12 | Sweeping Strikes | `Shift+2` | told by the user; the saved bindings of 2026-11-07 still had Shift+2 on stance bar button 2 (Defensive Stance): check it |
+| 13 | Whirlwind | `2` | button 2 of the main bar: the `D-Whirlwind` macro, to put on the Battle Stance page and on the Berserker Stance page (1st press Berserker Stance, 2nd press Whirlwind) |
+| 14 | Intercept | `Shift+<` | told by the user (`<`: the key left of W on a French keyboard); Berserker Stance only |
 
 - Main bar keys (`F4`, `5`, `C`, `1`, `Shift+C`, `4`) press the Battle Stance page: in another stance they press
   that stance's button.

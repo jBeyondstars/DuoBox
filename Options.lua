@@ -10,7 +10,7 @@ local _, ns = ...
 local function DB() return ns.GetDB() end
 local Print = ns.Print
 
-local WIDTH, HEIGHT = 620, 540 -- 620 wide: 7 tabs; 540 high: the warrior panel's icon list at the bottom of DuoRelay
+local WIDTH, HEIGHT = 620, 560 -- 620 wide: 7 tabs; 560 high: the warrior panel's icon list at the bottom of DuoRelay
 local TABS = 7
 local COL2 = 240 -- x of the second column, inside a page
 
@@ -463,9 +463,9 @@ Toggle(relay, 0, -66, "relayPanel", "Panneau des sorts du guerrier",
 	.. "Icone N = declencheur \"pixel\": N de DuoRelay.json. Fenetre ou plein ecran fenetre. "
 	.. "Recharges estimees sur les icones (le jeu les cache en combat) : meme version de DuoBox sur le guerrier. "
 	.. "/duo panneau sorts <liste> : changer les icones (GUIDE.md, section 7).")
-Slider(relay, 0, -90, "relayPanelPerRow", "Icones par rangee (panneau guerrier)", 1, ns.RELAY_PANEL_MAX or 12, 1, "%d",
+Slider(relay, 0, -90, "relayPanelPerRow", "Icones par rangee (panneau guerrier)", 1, ns.RELAY_PANEL_MAX or 15, 1, "%d",
 	"Nombre d'icones sur chaque rangee du panneau des sorts du guerrier : 4 avec 8 sorts = 2 rangees de 4. "
-	.. "12 = une seule rangee.")
+	.. "15 = une seule rangee.")
 Toggle(relay, 0, -136, "relayPanelTooltip", "Infobulles des sorts (panneau guerrier)",
 	"Decoche : survoler une icone du panneau n'affiche plus l'infobulle du sort. Le clic fonctionne pareil.")
 
@@ -491,7 +491,7 @@ Note(relay, 0, -264, 560):SetText("|cff999999Coche, DuoBox dessine 4 petits carr
 -- One box per icon of the warrior's spell panel (/duo panneau sorts), 3 per row in panel order
 Header(relay, 0, -324, "Icones du panneau des sorts du guerrier (decoche = masquee)")
 local relayBoxes = {}
-for i = 1, ns.RELAY_PANEL_MAX or 12 do
+for i = 1, ns.RELAY_PANEL_MAX or 15 do
 	local cb = CheckBox(relay, ((i - 1) % 3) * 165, -342 - math.floor((i - 1) / 3) * 20, "")
 	cb:SetSize(20, 20)
 	cb.label:SetFontObject("GameFontHighlightSmall")

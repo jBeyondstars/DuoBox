@@ -40,7 +40,7 @@
 
 local _, ns = ...
 
-local MAX = 12      -- icons (the options page lists them in 2 columns of 6)
+local MAX = 15      -- icons (the options page lists them in rows of 3)
 local SIZE = 36     -- icon size (UI units)
 local GAP = 4
 local HANDLE = 12   -- height of the drag strip above the icons

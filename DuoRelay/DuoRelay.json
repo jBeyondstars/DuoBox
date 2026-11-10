@@ -110,6 +110,20 @@
       "pixel": 12,
       "keys": "SHIFT-2",
       "delayMs": 0
+    },
+    {
+      "name": "whirlwind",
+      "label": "panel icon 13: Whirlwind, action bar key 2: the D-Whirlwind macro on button 2 of the Battle Stance and Berserker Stance pages (1st press Berserker Stance, 2nd press Whirlwind)",
+      "pixel": 13,
+      "keys": "2",
+      "delayMs": 0
+    },
+    {
+      "name": "intercept",
+      "label": "panel icon 14: Intercept, key Shift+< (the user's binding; < is the key left of W on a French keyboard). Berserker Stance only",
+      "pixel": 14,
+      "keys": "SHIFT-<",
+      "delayMs": 0
     }
   ],
   "moves": [

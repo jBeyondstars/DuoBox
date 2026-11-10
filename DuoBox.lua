@@ -57,7 +57,7 @@ local defaults = {
 	facingCone  = false,  -- yellow cone at the partner's feet, where it faces (FacingCone.lua)
 	coneHeight  = 100,    -- %: how far under the partner's nameplate the cone starts (its feet)
 	relayPanel  = false,  -- DuoRelay: panel of the warrior's spells, a click = the warrior casts it (RelayPanel.lua)
-	relayPanelSpells = "402927,1240193,5308,6343,7384,78,845,1715,5246,interact,1161,12292", -- its icons, in DuoRelay.json "pixel" order: Victory Rush, Slam, Execute, Thunder Clap, Overpower, Heroic Strike, Cleave, Hamstring, Intimidating Shout, the interact key, Challenging Shout, Sweeping Strikes
+	relayPanelSpells = "402927,1240193,5308,6343,7384,78,845,1715,5246,interact,1161,12292,1680,20252", -- its icons, in DuoRelay.json "pixel" order: Victory Rush, Slam, Execute, Thunder Clap, Overpower, Heroic Strike, Cleave, Hamstring, Intimidating Shout, the interact key, Challenging Shout, Sweeping Strikes, Whirlwind, Intercept
 	relayPanelHidden = "", -- entries of that list whose icon is hidden (Options > DuoRelay)
 	relayPanelPerRow = 12, -- icons per row of that panel (Options > DuoRelay)
 	relayPanelTooltip = true, -- spell tooltips on that panel's icons
@@ -1204,6 +1204,8 @@ local function MacroList()
 			{ "D-Talk",    ("#showtooltip\n/assist %s\n/duo npc\n/interact"):format(T) },
 			-- 1st press switches to Battle Stance if needed (out of combat only), 2nd press charges.
 			-- Charge is not usable in combat: there it switches to the partner's live enemy target instead.
+			-- No Berserker Stance here: Sweeping Strikes, cast after the Charge, needs Battle Stance
+			-- (user, 2026-11-10); D-Whirlwind leaves it.
 			{ "D-Charge",  ("#showtooltip Charge\n/target [combat,@%starget,harm,nodead]\n%s%s/cast [nostance:1,nocombat,harm,nodead] Battle Stance; [harm,nodead] Charge"):format(A, ASSIST, STOP_FOLLOW) },
 			-- Same, but always takes the partner's target (even with your own enemy target) and attacks it.
 			-- No /interact in combat: it can go to the mob already in front of you instead of the new target.
@@ -1221,6 +1223,9 @@ local function MacroList()
 			{ "D-Execute", melee("Execute") },
 			-- 1st press switches to Defensive Stance if needed, 2nd press taunts
 			{ "D-Taunt",   melee("Taunt", "[nostance:2,harm,nodead] Defensive Stance; [harm,nodead] Taunt") },
+			-- 1st press switches to Berserker Stance if needed, 2nd press whirlwinds (no target needed).
+			-- For button 2 of the Battle Stance and Berserker Stance pages: the panel's icon 13 presses 2.
+			{ "D-Whirlwind", melee("Whirlwind", "[nostance:3] Berserker Stance; Whirlwind") },
 			-- Same as the Kick button; the tooltip follows the spell the conditions pick
 			{ "D-Kick",    melee("", "[stance:3,harm,nodead] Pummel; [noequipped:Shields,harm,nodead] Pummel; [harm,nodead] Shield Bash") },
 		}

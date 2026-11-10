@@ -30,7 +30,8 @@ SPELLS = {[402927] = {"Victory Rush", 132342}, [1240193] = {"Slam", 132340}, [53
           [6343] = {"Thunder Clap", 136105}, [7384] = {"Overpower", 132223}, [78] = {"Heroic Strike", 132282},
           [845] = {"Cleave", 132338}, [1715] = {"Hamstring", 132316}, [7386] = {"Sunder Armor", 132363},
           [772] = {"Rend", 132155}, [355] = {"Taunt", 136080}, [1161] = {"Challenging Shout", 132091},
-          [12292] = {"Sweeping Strikes", 132306}}
+          [12292] = {"Sweeping Strikes", 132306},
+          [1680] = {"Whirlwind", 132369}, [20252] = {"Intercept", 132307}}
 ns = {DEFAULTS = {relayPanelSpells = "402927,1240193,5308,6343,7384"}}
 function ns.GetDB() return db end
 function ns.Print(msg) table.insert(printed, msg) end
@@ -550,10 +551,10 @@ class RelayPanelTest(unittest.TestCase):
             assert(db.relayPanelSpells == "402927,1240193,6343")   -- unchanged
             assert(last():find("Frostbolt, 99999999", 1, true), last())
 
-            ns.RelayPanelCommand("sorts 78,845,1715,7386,772,355,402927,1240193,5308,6343,7384,Challenging Shout,interact")
-            assert(db.relayPanelSpells == "402927,1240193,6343" and last():find("12 sorts au plus"), last())
-            ns.RelayPanelCommand("sorts 78,845,1715,7386,772,355,402927,1240193,5308,6343,7384,Challenging Shout")
-            assert(shownIcons() == 12 and db.relayPanelSpells:find(",1161$"), db.relayPanelSpells)
+            ns.RelayPanelCommand("sorts 78,845,1715,7386,772,355,402927,1240193,5308,6343,7384,Sweeping Strikes,Whirlwind,Intercept,Challenging Shout,interact")
+            assert(db.relayPanelSpells == "402927,1240193,6343" and last():find("15 sorts au plus"), last())
+            ns.RelayPanelCommand("sorts 78,845,1715,7386,772,355,402927,1240193,5308,6343,7384,Sweeping Strikes,Whirlwind,Intercept,Challenging Shout")
+            assert(shownIcons() == 15 and db.relayPanelSpells:find(",1161$"), db.relayPanelSpells)
 
             ns.RelayPanelCommand("defaut")
             assert(db.relayPanelSpells == "402927,1240193,5308,6343,7384")
