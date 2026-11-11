@@ -57,7 +57,7 @@ local defaults = {
 	facingCone  = false,  -- yellow cone at the partner's feet, where it faces (FacingCone.lua)
 	coneHeight  = 100,    -- %: how far under the partner's nameplate the cone starts (its feet)
 	relayPanel  = false,  -- DuoRelay: panel of the warrior's spells, a click = the warrior casts it (RelayPanel.lua)
-	relayPanelSpells = "402927,1240193,5308,6343,7384,78,845,1715,5246,interact,1161,12292,1680,20252", -- its icons, in DuoRelay.json "pixel" order: Victory Rush, Slam, Execute, Thunder Clap, Overpower, Heroic Strike, Cleave, Hamstring, Intimidating Shout, the interact key, Challenging Shout, Sweeping Strikes, Whirlwind, Intercept
+	relayPanelSpells = "402927,1240193,5308,6343,7384,78,845,1715,5246,interact,1161,12292,1680,20252,12294", -- its icons, in DuoRelay.json "pixel" order: Victory Rush, Slam, Execute, Thunder Clap, Overpower, Heroic Strike, Cleave, Hamstring, Intimidating Shout, the interact key, Challenging Shout, Sweeping Strikes, Whirlwind, Intercept, Mortal Strike
 	relayPanelHidden = "", -- entries of that list whose icon is hidden (Options > DuoRelay)
 	relayPanelPerRow = 12, -- icons per row of that panel (Options > DuoRelay)
 	relayPanelTooltip = true, -- spell tooltips on that panel's icons

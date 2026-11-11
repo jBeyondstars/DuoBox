@@ -124,6 +124,13 @@
       "pixel": 14,
       "keys": "SHIFT-<",
       "delayMs": 0
+    },
+    {
+      "name": "mortalstrike",
+      "label": "panel icon 15: Mortal Strike, key Shift+1 (the user's binding; Action Bar 6 button 1 = MULTIACTIONBAR5BUTTON1 in the saved bindings of 2026-11-11)",
+      "pixel": 15,
+      "keys": "SHIFT-1",
+      "delayMs": 0
     }
   ],
   "moves": [

@@ -741,7 +741,7 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
 - Default icons: **1** Victory Rush, **2** Slam, **3** Execute, **4** Thunder Clap, **5** Overpower,
   **6** Heroic Strike, **7** Cleave, **8** Hamstring, **9** Intimidating Shout, **10** Interagir (the warrior's
   interact key, T: not a spell, so no cooldown and no blink), **11** Challenging Shout, **12** Sweeping Strikes,
-  **13** Whirlwind, **14** Intercept (15 icons at most). After a DuoBox update that adds icons, `/duo panneau defaut` on the priest takes
+  **13** Whirlwind, **14** Intercept, **15** Mortal Strike (15 icons: the panel is full). After a DuoBox update that adds icons, `/duo panneau defaut` on the priest takes
   the new list (the saved list is kept otherwise).
   `/duo panneau sorts Victory Rush, Slam, 5308, interact` replaces them (English names of the usual warrior spells,
   spell IDs, or `interact`; 15 at most), `/duo panneau sorts` lists them with their numbers, `/duo panneau defaut`
@@ -749,7 +749,7 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
 - **Show or hide icons**: at the bottom of the **DuoRelay** tab, "Icones du panneau des sorts du guerrier" has one box
   per icon of the list. Unticked, the icon leaves the panel and the others close the gap, but every icon keeps its
   number, so `DuoRelay.json` stays the same. `/duo panneau sorts` marks the hidden ones `(masque)`.
-- **DuoRelay > Icones par rangee**: icons per row (1 to 12, 12 by default = one row);
+- **DuoRelay > Icones par rangee**: icons per row (1 to 15, 12 by default; 15 = one row);
   4 with 8 spells gives 2 rows of 4. Hidden icons take no place.
 - **Blinking icons**: Overpower, Execute and Victory Rush (and Revenge if it is in the panel) blink as soon as the
   warrior's game lights them up, **yellow** when castable, **blue** when lit but short of rage. Same detection as
@@ -765,7 +765,7 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
   one ends later. Heroic Strike and Cleave are off the global cooldown. The cooldown's length: read from the game
   when it shows it (out of combat), else the length read out of combat earlier in the session, the game's base
   value, the spell's tooltip, and last DuoBox's table (Overpower 5 s, Thunder Clap 4 s, Intimidating Shout 3 min,
-  Challenging Shout 10 min, Sweeping Strikes 30 s).
+  Challenging Shout 10 min, Sweeping Strikes 30 s, Mortal Strike 6 s).
   Not seen: resets and reductions in a fight (talents, procs), casts while the panel is hidden; addon messages
   may be blocked in some instances. Needs the same DuoBox version on both characters (`/reload` on both).
   `/duo panneau cd`: clock offset and round trip, last cast received and where its length came from.
@@ -778,7 +778,7 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
   the picture, and the clicks on the icons do nothing.
 - The icon number is the `"pixel"` of a trigger in `DuoRelay.json`, which holds the key PC 2 presses: keep both
   lists in the same order. Default triggers, read from the warrior's key bindings and combat journal (Execute and
-  Intimidating Shout: their bar slot told by the user; Challenging Shout, Sweeping Strikes, Whirlwind and Intercept: their key told by the user) on 2026-11-07, 2026-11-08 and 2026-11-10:
+  Intimidating Shout: their bar slot told by the user; Challenging Shout, Sweeping Strikes, Whirlwind, Intercept and Mortal Strike: their key told by the user) on 2026-11-07, 2026-11-08, 2026-11-10 and 2026-11-11:
 
 | Icon | Spell | Key on PC 2 | Action bar slot |
 |---|---|---|---|
@@ -796,6 +796,7 @@ Slam (WoW Forever) are only cast by an action-bar key, not by `/cast`.
 | 12 | Sweeping Strikes | `Shift+2` | told by the user; the saved bindings of 2026-11-07 still had Shift+2 on stance bar button 2 (Defensive Stance): check it |
 | 13 | Whirlwind | `2` | button 2 of the main bar: the `D-Whirlwind` macro, to put on the Battle Stance page and on the Berserker Stance page (1st press Berserker Stance, 2nd press Whirlwind) |
 | 14 | Intercept | `Shift+<` | told by the user (`<`: the key left of W on a French keyboard); Berserker Stance only |
+| 15 | Mortal Strike | `Shift+1` | Action Bar 6, button 1 (MULTIACTIONBAR5BUTTON1 in the saved bindings of 2026-11-11) |
 
 - Main bar keys (`F4`, `5`, `C`, `1`, `Shift+C`, `4`) press the Battle Stance page: in another stance they press
   that stance's button.
